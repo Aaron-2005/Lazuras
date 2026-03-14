@@ -144,13 +144,15 @@ class Level:
     def all_solids(self):
         return self.solid_rects+self.gate_solid
 
-    def _activate_targets(self, targets, particles):
+    def _activate_targets(self, targets, particles, sound_mgr=None):
         for tid in targets:
             if tid in self.gates:
                 self.gates[tid].open=True
                 burst(particles,
                       self.gates[tid].x+TILE//2, self.gates[tid].base_y,
                       C_GOLD,20,3.5,life=35)
+                if sound_mgr:
+                    sound_mgr.play('gate')
 
     def _deactivate_targets(self, targets):
         for tid in targets:
@@ -160,7 +162,7 @@ class Level:
                     self.gates[tid].open=False
                     self.gates[tid].y=float(self.gates[tid].base_y)
 
-    def update(self, player, cam):
+    def update(self, player, cam, sound_mgr=None):
         global _current_solids
         self.t+=1; self.reached_exit=False
         all_s=self.all_solids()
@@ -185,7 +187,9 @@ class Level:
             plate.active=any(plate.rect().colliderect(b.rect()) for b in self.boxes)
             if plate.active and not was:
                 burst(self.particles,plate.x+TILE//2,plate.y+TILE//2,C_GREEN,14,2.5,life=30)
-                self._activate_targets(plate.targets, self.particles)
+                self._activate_targets(plate.targets, self.particles, sound_mgr)
+                if sound_mgr:
+                    sound_mgr.play('plate')
             elif not plate.active and was:
                 self._deactivate_targets(plate.targets)
 
@@ -197,7 +201,9 @@ class Level:
                 changed=lv.try_activate(player.rect(), self.particles)
                 if changed:
                     if lv.active:
-                        self._activate_targets(lv.targets, self.particles)
+                        self._activate_targets(lv.targets, self.particles, sound_mgr)
+                        if sound_mgr:
+                            sound_mgr.play('lever')
                     else:
                         self._deactivate_targets(lv.targets)
 
@@ -226,6 +232,8 @@ class Level:
                         burst(self.particles,
                               pad['rect'].centerx,pad['rect'].top,
                               C_GREEN,12,2.0,life=28,sz=2)
+                        if sound_mgr:
+                            sound_mgr.play('checkpoint')
             if self.exit_rect and player.rect().colliderect(self.exit_rect):
                 self.reached_exit=True
 

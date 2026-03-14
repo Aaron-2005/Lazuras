@@ -235,8 +235,8 @@ def main():
             
             player.update(keys, level.all_solids(), level.boxes,
                           level.moving_platforms, level.particles, cam,
-                          level_runtime._current_solids)
-            level.update(player, cam)
+                          level_runtime._current_solids, sound_mgr)
+            level.update(player, cam, sound_mgr)
             cam.update(player.x+Player.W//2, player.y+Player.H//2)
 
             # Death sound
