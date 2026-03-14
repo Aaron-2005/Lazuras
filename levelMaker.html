@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Level Sketch Editor</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171b2e;
+      --panel-2: #111527;
+      --text: #e8ebff;
+      --muted: #aab2d6;
+      --line: #2a3152;
+      --accent: #7c8cff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .section { margin-bottom: 18px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 1.5rem; margin-bottom: 12px; }
+    h2 { font-size: 1rem; margin-bottom: 10px; color: var(--muted); }
+    .small { color: var(--muted); font-size: 0.92rem; }
+    input, textarea, select, button {
+      font: inherit;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    textarea {
+      min-height: 260px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      background: #20284a;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
+    button.active {
+      background: var(--accent);
+      color: #08102e;
+      border-color: transparent;
+      font-weight: 700;
+    }
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .palette button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      background: var(--panel-2);
+    }
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.18);
+      flex: 0 0 auto;
+    }
+    .main {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      overflow: auto;
+    }
+    .topbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    .badge {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .grid {
+      display: grid;
+      gap: 2px;
+      background: #0b0f1b;
+      padding: 10px;
+      border-radius: 16px;
+      width: max-content;
+      user-select: none;
+    }
+    .cell {
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 6px;
+      position: relative;
+      cursor: crosshair;
+    }
+    .obj {
+      position: absolute;
+      inset: 3px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    @media (max-width: 960px) {
+      .wrap { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <div class="panel section">
+        <h1>Level Sketch Editor</h1>
+        <p class="small">Single HTML file. No React, no install, just open it in your browser.</p>
+      </div>
+
+      <div class="panel section">
+        <h2>Level name</h2>
+        <input id="levelName" type="text" value="new_level" />
+      </div>
+
+      <div class="panel section">
+        <h2>Layer</h2>
+        <div class="row" id="layerButtons"></div>
+      </div>
+
+      <div class="panel section">
+        <h2>Tool</h2>
+        <div class="row" id="toolButtons"></div>
+      </div>
+
+      <div class="panel section">
+        <h2>Palette</h2>
+        <div class="palette" id="palette"></div>
+      </div>
+
+      <div class="panel section">
+        <h2>Actions</h2>
+        <div class="row">
+          <button id="clearLayerBtn">Clear current layer</button>
+          <button id="resetBtn">Reset all</button>
+          <button id="copyBtn">Copy export</button>
+          <button id="downloadBtn">Download export</button>
+        </div>
+      </div>
+
+      <div class="panel section">
+        <h2>Export</h2>
+        <textarea id="exportBox" readonly></textarea>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="badge">30 × 18</div>
+        <div class="badge" id="layerBadge">Layer: tiles</div>
+        <div class="badge" id="toolBadge">Tool: draw</div>
+        <div class="badge" id="selectedBadge">Selected: wall (#)</div>
+      </div>
+
+      <div id="grid" class="grid"></div>
+
+      <div class="legend">
+        <div class="panel">
+          <h3 style="margin-bottom:10px;">How to use</h3>
+          <pre>1. Pick tiles or objects
+2. Pick a tool
+3. Draw on the grid
+4. Copy the export text
+5. Paste it into ChatGPT
+6. I convert it into levels.py</pre>
+        </div>
+        <div class="panel">
+          <h3 style="margin-bottom:10px;">Conventions</h3>
+          <pre>S = spawn
+X = exit
+T = gate
+V = lever
+P = plate
+M = moving platform
+
+Use one object per cell.
+Use repeated T cells if you want to sketch a tall gate.</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const COLS = 30;
+    const ROWS = 18;
+
+    const tileItems = [
+      { key: '.', label: 'empty', color: '#181827' },
+      { key: '#', label: 'wall', color: '#4b4b60' },
+      { key: '=', label: 'floor', color: '#6b6255' },
+      { key: '-', label: 'platform', color: '#607080' },
+      { key: 'G', label: 'ghost barrier', color: '#6f3a93' },
+      { key: 'H', label: 'hazard', color: '#8b1e1e' },
+      { key: 'L', label: 'lava', color: '#c2410c' },
+    ];
+
+    const objectItems = [
+      { key: '.', label: 'empty', color: 'transparent', textColor: '#fff' },
+      { key: 'S', label: 'spawn', color: '#3b9c35', textColor: '#fff' },
+      { key: 'B', label: 'box', color: '#9a6a36', textColor: '#fff' },
+      { key: 'P', label: 'plate', color: '#c99700', textColor: '#111' },
+      { key: 'T', label: 'gate', color: '#c56a11', textColor: '#fff' },
+      { key: 'V', label: 'lever', color: '#c8a500', textColor: '#111' },
+      { key: 'K', label: 'spike', color: '#b22222', textColor: '#fff' },
+      { key: 'E', label: 'enemy', color: '#d62828', textColor: '#fff' },
+      { key: 'M', label: 'mov.platform', color: '#1f8a9b', textColor: '#fff' },
+      { key: 'D', label: 'pad', color: '#2f68bd', textColor: '#fff' },
+      { key: 'X', label: 'exit', color: '#29b35f', textColor: '#fff' },
+    ];
+
+    let currentLayer = 'tiles';
+    let currentTool = 'draw';
+    let selectedTile = '#';
+    let selectedObject = 'S';
+    let mouseDown = false;
+
+    let tiles = makeGrid('.');
+    let objects = makeGrid('.');
+
+    const gridEl = document.getElementById('grid');
+    const paletteEl = document.getElementById('palette');
+    const exportBox = document.getElementById('exportBox');
+    const levelNameInput = document.getElementById('levelName');
+    const layerBadge = document.getElementById('layerBadge');
+    const toolBadge = document.getElementById('toolBadge');
+    const selectedBadge = document.getElementById('selectedBadge');
+
+    function makeGrid(fill) {
+      return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => fill));
+    }
+
+    function cloneGrid(grid) {
+      return grid.map(row => [...row]);
+    }
+
+    function currentPalette() {
+      return currentLayer === 'tiles' ? tileItems : objectItems;
+    }
+
+    function currentSelectedKey() {
+      return currentLayer === 'tiles' ? selectedTile : selectedObject;
+    }
+
+    function selectedLabel() {
+      const item = currentPalette().find(i => i.key === currentSelectedKey());
+      return item ? `${item.label} (${item.key})` : currentSelectedKey();
+    }
+
+    function renderButtons() {
+      renderLayerButtons();
+      renderToolButtons();
+      renderPalette();
+      updateBadges();
+    }
+
+    function renderLayerButtons() {
+      const root = document.getElementById('layerButtons');
+      root.innerHTML = '';
+      ['tiles', 'objects'].forEach(name => {
+        const btn = document.createElement('button');
+        btn.textContent = name;
+        if (currentLayer === name) btn.classList.add('active');
+        btn.onclick = () => {
+          currentLayer = name;
+          renderButtons();
+        };
+        root.appendChild(btn);
+      });
+    }
+
+    function renderToolButtons() {
+      const root = document.getElementById('toolButtons');
+      root.innerHTML = '';
+      ['draw', 'erase', 'fill', 'pick'].forEach(name => {
+        const btn = document.createElement('button');
+        btn.textContent = name;
+        if (currentTool === name) btn.classList.add('active');
+        btn.onclick = () => {
+          currentTool = name;
+          renderButtons();
+        };
+        root.appendChild(btn);
+      });
+    }
+
+    function renderPalette() {
+      paletteEl.innerHTML = '';
+      currentPalette().forEach(item => {
+        const btn = document.createElement('button');
+        if (currentSelectedKey() === item.key) btn.classList.add('active');
+        btn.onclick = () => {
+          if (currentLayer === 'tiles') selectedTile = item.key;
+          else selectedObject = item.key;
+          renderButtons();
+        };
+
+        const swatch = document.createElement('div');
+        swatch.className = 'swatch';
+        swatch.style.background = item.color;
+
+        const text = document.createElement('div');
+        text.innerHTML = `<div>${item.label}</div><div style="font-size:12px;color:var(--muted)">${item.key}</div>`;
+
+        btn.appendChild(swatch);
+        btn.appendChild(text);
+        paletteEl.appendChild(btn);
+      });
+    }
+
+    function updateBadges() {
+      layerBadge.textContent = `Layer: ${currentLayer}`;
+      toolBadge.textContent = `Tool: ${currentTool}`;
+      selectedBadge.textContent = `Selected: ${selectedLabel()}`;
+    }
+
+    function renderGrid() {
+      gridEl.innerHTML = '';
+      gridEl.style.gridTemplateColumns = `repeat(${COLS}, 24px)`;
+
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const tileKey = tiles[r][c];
+          const objectKey = objects[r][c];
+          const tile = tileItems.find(i => i.key === tileKey);
+          const obj = objectItems.find(i => i.key === objectKey);
+
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.style.background = tile.color;
+          cell.title = `col:${c} row:${r} — tile:${tileKey} obj:${objectKey}`;
+
+          if (objectKey !== '.') {
+            const marker = document.createElement('div');
+            marker.className = 'obj';
+            marker.style.background = obj.color;
+            marker.style.color = obj.textColor || '#fff';
+            marker.textContent = objectKey;
+            cell.appendChild(marker);
+          }
+
+          cell.onmousedown = () => {
+            mouseDown = true;
+            applyAt(r, c);
+          };
+          cell.onmouseenter = () => {
+            if (mouseDown && (currentTool === 'draw' || currentTool === 'erase')) {
+              applyAt(r, c);
+            }
+          };
+
+          gridEl.appendChild(cell);
+        }
+      }
+
+      refreshExport();
+    }
+
+    function applyAt(row, col) {
+      if (currentLayer === 'tiles') {
+        if (currentTool === 'pick') {
+          selectedTile = tiles[row][col];
+          renderButtons();
+          return;
+        }
+        if (currentTool === 'fill') {
+          floodFill('tiles', row, col, tiles[row][col], selectedTile);
+          return;
+        }
+        const next = cloneGrid(tiles);
+        next[row][col] = currentTool === 'erase' ? '.' : selectedTile;
+        tiles = next;
+      } else {
+        if (currentTool === 'pick') {
+          selectedObject = objects[row][col];
+          renderButtons();
+          return;
+        }
+        if (currentTool === 'fill') {
+          floodFill('objects', row, col, objects[row][col], selectedObject);
+          return;
+        }
+        const next = cloneGrid(objects);
+        next[row][col] = currentTool === 'erase' ? '.' : selectedObject;
+        objects = next;
+      }
+      renderGrid();
+    }
+
+    function floodFill(layer, sr, sc, from, to) {
+      if (from === to) return;
+      const source = layer === 'tiles' ? cloneGrid(tiles) : cloneGrid(objects);
+      const q = [[sr, sc]];
+      const seen = new Set();
+
+      while (q.length) {
+        const [r, c] = q.shift();
+        const key = `${r},${c}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+        if (source[r][c] !== from) continue;
+        source[r][c] = to;
+        q.push([r + 1, c], [r - 1, c], [r, c + 1], [r, c - 1]);
+      }
+
+      if (layer === 'tiles') tiles = source;
+      else objects = source;
+      renderGrid();
+    }
+
+    function gridToText(grid) {
+      return grid.map(row => row.join('')).join('\n');
+    }
+
+    function makeExport() {
+      const name = levelNameInput.value.trim() || 'new_level';
+      return [
+        'LEVEL-SKETCH v1',
+        `name: ${name}`,
+        `size: ${COLS}x${ROWS}`,
+        '',
+        'TILE LEGEND',
+        '.=empty, #=wall, ==floor, -=platform, G=ghost_barrier, H=hazard, L=lava',
+        '',
+        'OBJECT LEGEND',
+        'S=spawn, B=box, P=plate, T=gate, V=lever, K=spike, E=enemy, M=mplat, D=pad, X=exit',
+        '',
+        'TILES',
+        gridToText(tiles),
+        '',
+        'OBJECTS',
+        gridToText(objects),
+      ].join('\n');
+    }
+
+    function refreshExport() {
+      exportBox.value = makeExport();
+    }
+
+    document.body.onmouseup = () => { mouseDown = false; };
+    document.body.onmouseleave = () => { mouseDown = false; };
+    levelNameInput.oninput = refreshExport;
+
+    document.getElementById('clearLayerBtn').onclick = () => {
+      if (currentLayer === 'tiles') tiles = makeGrid('.');
+      else objects = makeGrid('.');
+      renderGrid();
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+      tiles = makeGrid('.');
+      objects = makeGrid('.');
+      currentLayer = 'tiles';
+      currentTool = 'draw';
+      selectedTile = '#';
+      selectedObject = 'S';
+      levelNameInput.value = 'new_level';
+      renderButtons();
+      renderGrid();
+    };
+
+    document.getElementById('copyBtn').onclick = async () => {
+      refreshExport();
+      try {
+        await navigator.clipboard.writeText(exportBox.value);
+        alert('Copied export text.');
+      } catch {
+        alert('Copy failed. Select the export text manually and copy it.');
+      }
+    };
+
+    document.getElementById('downloadBtn').onclick = () => {
+      refreshExport();
+      const name = (levelNameInput.value.trim() || 'new_level') + '.txt';
+      const blob = new Blob([exportBox.value], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    renderButtons();
+    renderGrid();
+  </script>
+</body>
+</html>
