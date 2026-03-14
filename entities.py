@@ -48,8 +48,12 @@ class Box:
         r = self.rect()
         for s in collidables:
             if r.colliderect(s):
-                self.x = (s.left-self.W) if self.vx > 0 else float(s.right)
+                if self.vx > 0:
+                    self.x = float(s.left - self.W)
+                elif self.vx < 0:
+                    self.x = float(s.right)
                 self.vx = 0
+                break
         self.vx *= 0.5
 
         self.y += self.vy
@@ -60,6 +64,7 @@ class Box:
                     self.y=float(s.top-self.H); self.vy=0; self.on_ground=True
                 elif self.vy < 0:
                     self.y=float(s.bottom); self.vy=0
+                break
 
         if self.y > ROWS*TILE+TILE*2:
             self.y=float((ROWS-2)*TILE-self.H); self.vy=0.0
@@ -305,6 +310,10 @@ class Enemy:
         # Alert indicator
         if self.alert:
             a2=int(200*abs(math.sin(self.anim*0.25)))
+            al=pygame.Surface((16,16),pygame.SRCALPHA)
+            pygame.draw.polygon(al,(255,200,0,a2),[(8,0),(16,16),(0,16)])
+            pygame.draw.polygon(al,(255,60,0,a2//2),[(8,0),(16,16),(0,16)],1)
+            surf.blit(al,(sx+1,sy-20))
             al=pygame.Surface((16,16),pygame.SRCALPHA)
             pygame.draw.polygon(al,(255,200,0,a2),[(8,0),(16,16),(0,16)])
             pygame.draw.polygon(al,(255,60,0,a2//2),[(8,0),(16,16),(0,16)],1)

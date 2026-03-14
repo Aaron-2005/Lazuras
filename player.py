@@ -197,7 +197,7 @@ class Player:
         return not any(r.colliderect(s) for s in solid_rects)
 
     def update(self, keys, solid_rects, boxes, moving_platforms, particles, cam,
-               current_solids_ref):
+               current_solids_ref, sound_mgr=None):
         self.anim += 1
         if self.dead: return
 
@@ -227,6 +227,8 @@ class Player:
                 self.vy = -10.5  # Calculated impulse for 1.5x height
                 self.ghost_on_gnd = False
                 burst(particles, self.x+self.W//2, self.y+self.H, (120, 180, 255), 15, 3.5)
+                if sound_mgr:
+                    sound_mgr.play('jump')
             
             # Apply "Heavier" Ghost Gravity so we don't float off the map
             # This replaces the tiny 0.03 GGRAV with a snappier 0.30
@@ -258,6 +260,18 @@ class Player:
                             pi = i - len(landables)
                             if 0 <= pi < len(moving_platforms):
                                 self.x += moving_platforms[pi].vx
+
+            # Wall pass sound
+            if sound_mgr and any(r.colliderect(s) for s in solid_rects):
+                if not hasattr(self, 'wall_timer'):
+                    self.wall_timer = 0
+                self.wall_timer += 1
+                if self.wall_timer > 10:  # Every ~10 frames when passing through
+                    sound_mgr.play('wall_pass')
+                    self.wall_timer = 0
+            else:
+                if hasattr(self, 'wall_timer'):
+                    self.wall_timer = 0
 
             # 4. BOUNDARIES & VISUALS
             self.x = max(0, min(self.x, COLS*TILE-self.W))
@@ -295,11 +309,15 @@ class Player:
                 self.jumps_left -= 1
                 burst(particles, self.x+self.W//2, self.y+self.H,
                       C_GREEN, 8, 2.0, grav=0.2, life=16, sz=2)
+                if sound_mgr:
+                    sound_mgr.play('jump')
             elif self.jumps_left > 0:
                 self.vy=self.JMP*0.85; self.jbuf=0
                 self.jumps_left -= 1
                 burst(particles, self.x+self.W//2, self.y+self.H//2,
                       C_ACCENT, 10, 2.5, grav=0.15, life=18, sz=2)
+                if sound_mgr:
+                    sound_mgr.play('jump')
 
         self.vy = min(self.vy+self.GRAV, self.MXFALL)
         self.on_gnd = False
@@ -343,6 +361,15 @@ class Player:
                 elif self.vy < 0:
                     self.y = float(s.bottom)
                     self.vy = 0
+
+        # Walk sound
+        if self.on_gnd and abs(self.vx) > 0.5 and sound_mgr:
+            if not hasattr(self, 'walk_timer'):
+                self.walk_timer = 0
+            self.walk_timer += abs(self.vx)
+            if self.walk_timer > 20:  # Every ~20 pixels
+                sound_mgr.play('walk')
+                self.walk_timer = 0
 
     def draw(self, surf, cam, boxes, current_solids):
         sx, sy = cam.apply(int(self.x), int(self.y))

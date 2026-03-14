@@ -20,6 +20,14 @@ from level_runtime import Camera, Level, make_far_layer, make_mid_layer, _curren
 import level_runtime
 from levels import LEVELS
 
+# Try to import sound manager (optional feature)
+try:
+    from sound_manager import SoundManager
+    SOUND_AVAILABLE = True
+except ImportError:
+    SOUND_AVAILABLE = False
+    print("Sound manager not available - running without sound")
+
 # ── font refs shared across modules ─────────────────────
 import player as _player_mod
 
@@ -27,12 +35,34 @@ _fsm  = None
 _fmed = None
 _fbig = None
 
+# ── Game state tracking ──────────────────────────────────
+class GameStats:
+    """Track player statistics across the game"""
+    def __init__(self):
+        self.total_deaths = 0
+        self.level_attempts = [0] * len(LEVELS)
+        self.level_best_cycles = [DEFAULT_CYCLES] * len(LEVELS)
+        self.ghost_time_used = 0
+        
+    def record_death(self, level_idx):
+        self.total_deaths += 1
+        if 0 <= level_idx < len(self.level_attempts):
+            self.level_attempts[level_idx] += 1
+    
+    def record_level_complete(self, level_idx, cycles_remaining):
+        if 0 <= level_idx < len(self.level_best_cycles):
+            self.level_best_cycles[level_idx] = min(
+                self.level_best_cycles[level_idx], 
+                DEFAULT_CYCLES - cycles_remaining
+            )
+
 
 # ══════════════════════════════════════════════════════════
 # HUD
 # ══════════════════════════════════════════════════════════
-def draw_hud(surf, player, lnum, hint_t, gt):
-    pan=pygame.Surface((300,52),pygame.SRCALPHA); pan.fill((6,4,3,200))
+def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
+    # Larger panel to fit more info
+    pan=pygame.Surface((320,70),pygame.SRCALPHA); pan.fill((6,4,3,200))
     surf.blit(pan,(10,10))
 
     for i in range(4):
@@ -50,6 +80,11 @@ def draw_hud(surf, player, lnum, hint_t, gt):
     ft = _fsm.render("◈  GHOST",True,C_SOUL) if player.ghost \
          else _fsm.render("◆  LIVING",True,C_LIVING)
     surf.blit(ft,(155,20))
+    
+    # Show death counter
+    if stats:
+        deaths_txt = _fsm.render(f"Deaths: {stats.total_deaths}", True, (120,100,80))
+        surf.blit(deaths_txt, (155, 36))
 
     if player.ghost or player.gtimer > 0:
         bw=160; bx=14; by2=66
@@ -81,8 +116,8 @@ def draw_hud(surf, player, lnum, hint_t, gt):
 
     if hint_t > 0:
         a=min(255,hint_t*3)
-        lines=["Q — Ghost: fly through walls to scout  |  E — Activate levers",
-               "Push boxes onto plates to open gates  |  Ride moving platforms"]
+        lines=["Q — Ghost: fly through walls to scout  |  E — Activate levers  |  M — Toggle Sound",
+               "Push boxes onto plates to open gates  |  Ride moving platforms  |  P — Pause"]
         for i,line in enumerate(lines):
             ht=_fsm.render(line,True,(138,125,105))
             hs=pygame.Surface(ht.get_size(),pygame.SRCALPHA)
@@ -133,10 +168,22 @@ def main():
     tileset    = TileSet(ts_path)
     far_layer  = make_far_layer()
     mid_layer  = make_mid_layer()
+    
+    # Initialize sound manager
+    sound_mgr = None
+    if SOUND_AVAILABLE:
+        try:
+            sound_mgr = SoundManager(enabled=True)
+        except:
+            sound_mgr = None
+            print("Could not initialize sound manager")
+    
+    # Game statistics
+    stats = GameStats()
 
     cur=0; hint_t=520; gt=0
 
-    def load(idx, cycles=4):
+    def load(idx, cycles=DEFAULT_CYCLES):
         td,obs = LEVELS[idx]()
         lvl    = Level(td, obs, tileset)
         sx,sy  = lvl.spawn_pos
@@ -145,6 +192,7 @@ def main():
 
     level, player = load(cur)
     cam=Camera(); state='title'; state_t=0
+    paused = False
 
     running=True
     while running:
@@ -154,34 +202,55 @@ def main():
             if ev.type==pygame.QUIT: running=False
             if ev.type==pygame.KEYDOWN:
                 if ev.key==pygame.K_ESCAPE: running=False
+                if ev.key==pygame.K_p and state=='play':
+                    paused = not paused
+                if ev.key==pygame.K_m and sound_mgr:
+                    sound_mgr.toggle()
                 if state=='title':
                     state='play'; state_t=0
-                elif state=='play':
+                elif state=='play' and not paused:
                     if ev.key==pygame.K_q:
+                        prev_ghost = player.ghost
                         player.toggle_ghost(level.all_solids())
+                        if sound_mgr and prev_ghost != player.ghost:
+                            sound_mgr.play('ghost_on' if player.ghost else 'ghost_off')
                     if ev.key==pygame.K_r:
                         level,player=load(cur,player.cycles)
                         state='play'; state_t=0; hint_t=200
                 elif state in ('dead','gameover','win'):
                     if ev.key==pygame.K_r:
                         if state in ('gameover','win'):
-                            cur=0; level,player=load(0,4)
+                            cur=0; level,player=load(0,DEFAULT_CYCLES)
                         else:
                             level,player=load(cur,player.cycles)
                         state='play'; state_t=0; hint_t=200
 
-        if state=='play':
+        if state=='play' and not paused:
             hint_t=max(0,hint_t-1)
             keys=pygame.key.get_pressed()
+            
+            # Track previous state for sound effects
+            prev_dead = player.dead
+            prev_ghost_timer = player.gtimer
+            
             player.update(keys, level.all_solids(), level.boxes,
                           level.moving_platforms, level.particles, cam,
-                          level_runtime._current_solids)
-            level.update(player, cam)
+                          level_runtime._current_solids, sound_mgr)
+            level.update(player, cam, sound_mgr)
             cam.update(player.x+Player.W//2, player.y+Player.H//2)
 
+            # Death sound
+            if player.dead and not prev_dead:
+                if sound_mgr:
+                    sound_mgr.play('death')
+                stats.record_death(cur)
+            
             if player.dead:
                 state='gameover' if player.cycles<=0 else 'dead'; state_t=0
             if level.reached_exit:
+                if sound_mgr:
+                    sound_mgr.play('exit')
+                stats.record_level_complete(cur, player.cycles)
                 cur+=1
                 if cur >= len(LEVELS): state='win'; state_t=0
                 else: level,player=load(cur,player.cycles); state='play'; state_t=0
@@ -205,16 +274,18 @@ def main():
                 "LIVING: push boxes onto plates, ride moving platforms, reach the exit.",
                 "Ghost timer drains — plan where to rematerialise or die inside a wall.",
                 "Cultist guards patrol — they cannot see your ghost form.",
+                "",
+                "Controls: A/D - Move | W/SPACE - Jump | Q - Ghost Toggle | P - Pause | M - Sound"
             ]
             for i,line in enumerate(lines):
                 lt=_fsm.render(line,True,(90,80,62))
-                screen.blit(lt,(SW//2-lt.get_width()//2,SH//2+2+i*20))
+                screen.blit(lt,(SW//2-lt.get_width()//2,SH//2+2+i*16))
             pt=_fmed.render("Press any key",True,(70,62,48))
-            screen.blit(pt,(SW//2-pt.get_width()//2,SH//2+118))
+            screen.blit(pt,(SW//2-pt.get_width()//2,SH//2+140))
         else:
             level.draw(screen,cam,far_layer,mid_layer,player,gt,_fsm)
             player.draw(screen,cam,level.boxes,level_runtime._current_solids)
-            draw_hud(screen,player,cur+1,hint_t,gt)
+            draw_hud(screen,player,cur+1,hint_t,gt,stats)
 
             if state=='dead':
                 draw_overlay(screen,f"RESURRECTION  {5-player.cycles}/4",
@@ -225,6 +296,21 @@ def main():
             elif state=='win':
                 draw_overlay(screen,"YOU ESCAPED THE TEMPLE",
                              "The Lazarus Project lives on.",C_GREEN,"R — Play again")
+            
+            # Pause overlay
+            if paused:
+                pov=pygame.Surface((SW,SH),pygame.SRCALPHA)
+                pov.fill((0,0,0,180))
+                screen.blit(pov,(0,0))
+                pt=_fbig.render("PAUSED",True,C_ACCENT)
+                screen.blit(pt,(SW//2-pt.get_width()//2,SH//2-30))
+                ps=_fmed.render("Press P to resume",True,(155,142,122))
+                screen.blit(ps,(SW//2-ps.get_width()//2,SH//2+10))
+                
+                # Show stats on pause screen
+                stat_y = SH//2 + 60
+                st1=_fsm.render(f"Total Deaths: {stats.total_deaths}",True,(120,110,95))
+                screen.blit(st1,(SW//2-st1.get_width()//2,stat_y))
 
         pygame.display.flip()
 
