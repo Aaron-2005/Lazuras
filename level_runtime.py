@@ -80,13 +80,21 @@ class Level:
     def __init__(self, tile_data, objects, tileset):
         global _current_solids
         self.tileset=tileset; self.tile_map={}
-        self.solid_rects=[]; self.particles=[]; self.t=0
+        self.solid_rects=[]; self.ghost_barrier_rects=[]; self.particles=[]; self.t=0
         self.reached_exit=False
 
-        for (tid,col,row) in tile_data:
-            self.tile_map[(col,row)] = tid
+        # First pass — build tile_map so later entries overwrite earlier ones.
+        # This means a T_GH_BAR placed on top of a solid wall wins at that cell.
+        for (tid, col, row) in tile_data:
+            self.tile_map[(col, row)] = tid
+
+        # Second pass — build collision rects from the resolved map only.
+        # No position can be both a solid rect AND a ghost barrier rect.
+        for (col, row), tid in self.tile_map.items():
             if tid in SOLID_TILES:
-                self.solid_rects.append(pygame.Rect(col*TILE,row*TILE,TILE,TILE))
+                self.solid_rects.append(pygame.Rect(col*TILE, row*TILE, TILE, TILE))
+            if tid in GHOST_TILES:
+                self.ghost_barrier_rects.append(pygame.Rect(col*TILE, row*TILE, TILE, TILE))
 
         self.boxes=[]; self.plates=[]; self.gates={}
         self.levers=[]; self.moving_platforms=[]; self.enemies=[]
@@ -142,7 +150,12 @@ class Level:
                          if not (g.open and g.y <= g.base_y-TILE*4)]
 
     def all_solids(self):
-        return self.solid_rects+self.gate_solid
+        """Solid tiles + gates. Used by ghost — no ghost barriers."""
+        return self.solid_rects + self.gate_solid
+
+    def living_solids(self):
+        """Solid tiles + gates + ghost barriers. Used by living player."""
+        return self.solid_rects + self.gate_solid + self.ghost_barrier_rects
 
     def _activate_targets(self, targets, particles, sound_mgr=None):
         for tid in targets:
@@ -250,7 +263,7 @@ class Level:
 
         for tc in self.torches: tc.draw(surf,cam,gt)
 
-        # Ghost-only tiles
+        # Ghost-only tiles — bright when ghost, dim when living
         for (col,row),tid in self.tile_map.items():
             if tid not in GHOST_TILES: continue
             sx,sy=cam.apply(col*TILE,row*TILE)
