@@ -210,36 +210,58 @@ class Player:
         if self.ghost:
             self.gtimer -= 1
             if self.gtimer <= 0:
-                self.ghost=False; self.gtimer=0
+                self.ghost = False; self.gtimer = 0
                 if not self._safe(solid_rects):
-                    self.dead=True; cam.shake(7,14)
-                    burst(particles, self.x+self.W//2, self.y+self.H//2,
-                          C_RED, 24, 4.5, life=40)
+                    self.dead = True; cam.shake(7, 14)
+                    burst(particles, self.x+self.W//2, self.y+self.H//2, C_RED, 24, 4.5, life=40)
                     return
 
-            # SIDEWAYS MOVEMENT (Snappy horizontal control)
-            if R:   self.vx=min(self.vx+1.3,  self.GSPD);  self.facing=1
-            elif L: self.vx=max(self.vx-1.3, -self.GSPD);  self.facing=-1
-            else:   self.vx*=0.82
-
-            # ANTI-GRAVITY JUMP (One-time pulse per transformation)
-            # We use 'getattr' to prevent crashing if you haven't added the variable yet
-            if U and getattr(self, 'ghost_can_jump', True):
-                self.vy = -6.5 
-                self.ghost_can_jump = False # Locks vertical movement until reset
-                burst(particles, self.x+self.W//2, self.y+self.H, (100,160,255), 12, 3.0)
-            
-            # Apply "Heavier" Ghost Gravity (Forces a natural descent)
-            self.vy += self.GGRAV * 2.5
-            self.vy = min(self.vy, self.GMXDY) 
-            self.vy *= 0.98 # Vertical friction prevents infinite drift
-
+            # 1. HORIZONTAL MOVEMENT (Glides through walls)
+            if R:   self.vx = min(self.vx + 1.3,  self.GSPD);  self.facing = 1
+            elif L: self.vx = max(self.vx - 1.3, -self.GSPD);  self.facing = -1
+            else:   self.vx *= 0.82
             self.x += self.vx
-            self.y += self.vy
+
+            # 2. VERTICAL MOVEMENT & 1.5x JUMP
+            if U and getattr(self, 'ghost_on_gnd', False):
+                self.vy = -10.5  # Calculated impulse for 1.5x height
+                self.ghost_on_gnd = False
+                burst(particles, self.x+self.W//2, self.y+self.H, (120, 180, 255), 15, 3.5)
             
-            # Boundary checks
-            self.x=max(0, min(self.x, COLS*TILE-self.W))
-            self.y=max(-TILE*3, min(self.y, ROWS*TILE+TILE))
+            # Apply "Heavier" Ghost Gravity so we don't float off the map
+            # This replaces the tiny 0.03 GGRAV with a snappier 0.30
+            self.vy += 0.30 
+            self.vy = min(self.vy, 10.0) # Terminal velocity
+            self.y += self.vy
+
+            # 3. LAND ON EVERYTHING (Floors, Boxes, Moving Platforms)
+            self.ghost_on_gnd = False
+            r = self.rect()
+            
+            # Combine all objects the ghost can stand on
+            landables = solid_rects + [b.rect() for b in boxes]
+            mp_rects = [p.rect() for p in moving_platforms]
+            all_landables = landables + mp_rects
+            
+            for i, s in enumerate(all_landables):
+                if r.colliderect(s):
+                    # One-way landing logic: 
+                    # Only land if falling (vy > 0) AND were above the platform.
+                    # This prevents the "shooting up" glitch when walking through walls.
+                    if self.vy > 0 and (self.y + self.H - self.vy) <= s.top + 5:
+                        self.y = float(s.top - self.H)
+                        self.vy = 0
+                        self.ghost_on_gnd = True
+                        
+                        # Ride moving platforms
+                        if i >= len(landables):
+                            pi = i - len(landables)
+                            if 0 <= pi < len(moving_platforms):
+                                self.x += moving_platforms[pi].vx
+
+            # 4. BOUNDARIES & VISUALS
+            self.x = max(0, min(self.x, COLS*TILE-self.W))
+            self.y = max(-TILE*3, min(self.y, ROWS*TILE+TILE))
 
             self.trail.append((self.x+self.W//2, self.y+self.H//2))
             if len(self.trail) > 24: self.trail.pop(0)
