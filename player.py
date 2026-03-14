@@ -264,35 +264,45 @@ class Player:
         self.vy = min(self.vy+self.GRAV, self.MXFALL)
         self.on_gnd = False
 
-        # Moving platform rects count as solid
+        box_rects = [b.rect() for b in boxes]
         mp_rects = [p.rect() for p in moving_platforms]
-        all_solid = solid_rects + [b.rect() for b in boxes] + mp_rects
+        all_solid = solid_rects + box_rects + mp_rects
 
         self.x += self.vx
-        r = self.rect()
-        for s in all_solid:
-            if r.colliderect(s):
-                self.x = (s.left-self.W) if self.vx > 0 else float(s.right)
-                self.vx = 0
-                for b in boxes:
-                    if r.colliderect(b.rect()):
-                        b.vx = self.PUSH_FORCE*(1 if self.facing > 0 else -1)
+        for i, s in enumerate(all_solid):
+            r = self.rect()
+            if not r.colliderect(s):
+                continue
+
+            # If the collided object is a box, apply push
+            if len(solid_rects) <= i < len(solid_rects) + len(boxes):
+                bi = i - len(solid_rects)
+                boxes[bi].vx = self.PUSH_FORCE * (1 if self.facing > 0 else -1)
+
+            if self.vx > 0:
+                self.x = float(s.left - self.W)
+            elif self.vx < 0:
+                self.x = float(s.right)
+
+            self.vx = 0
 
         self.y += self.vy
-        r = self.rect()
         for i, s in enumerate(all_solid):
+            r = self.rect()
             if r.colliderect(s):
                 if self.vy > 0:
-                    self.y=float(s.top-self.H); self.vy=0; self.on_gnd=True
-                    # Ride moving platform
-                    if i >= len(solid_rects)+len(boxes):
+                    self.y = float(s.top - self.H)
+                    self.vy = 0
+                    self.on_gnd = True
+
+                    if i >= len(solid_rects) + len(boxes):
                         pi = i - len(solid_rects) - len(boxes)
                         if 0 <= pi < len(moving_platforms):
                             self.x += moving_platforms[pi].vx
-                elif self.vy < 0:
-                    self.y=float(s.bottom); self.vy=0
 
-        if self.y > ROWS*TILE+80: self.dead=True
+                elif self.vy < 0:
+                    self.y = float(s.bottom)
+                    self.vy = 0
 
     def draw(self, surf, cam, boxes, current_solids):
         sx, sy = cam.apply(int(self.x), int(self.y))
