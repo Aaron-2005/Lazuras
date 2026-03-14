@@ -173,6 +173,7 @@ class Player:
         self.anim=0; self.facing=1; self.coy=0; self.jbuf=0
         self.trail=[]; self.inventory=None
         self.jumps_left = self.MAX_JUMPS
+        self.ghost_jump_ready = True
 
     def set_spawn(self, x, y): self.spawn_x=float(x); self.spawn_y=float(y)
 
@@ -187,7 +188,9 @@ class Player:
         if self.ghost:
             if self._safe(solid_rects): self.ghost=False
         elif self.gtimer <= 0:
-            self.ghost=True; self.gtimer=self.GDUR
+            self.ghost=True
+            self.gtimer=self.GDUR
+            self.ghost_jump_ready = True  # Reset the jump here
 
     def _safe(self, solid_rects):
         r = self.rect()
@@ -213,19 +216,34 @@ class Player:
                     burst(particles, self.x+self.W//2, self.y+self.H//2,
                           C_RED, 24, 4.5, life=40)
                     return
+
+            # SIDEWAYS MOVEMENT (Snappy horizontal control)
             if R:   self.vx=min(self.vx+1.3,  self.GSPD);  self.facing=1
             elif L: self.vx=max(self.vx-1.3, -self.GSPD);  self.facing=-1
-            else:   self.vx*=0.78
-            if U:   self.vy=max(self.vy-1.4, -self.GFLOAT)
-            elif D: self.vy=min(self.vy+1.4,  self.GFLOAT)
-            else:
-                self.vy+=self.GGRAV
-                self.vy=max(-self.GMXDY, min(self.GMXDY, self.vy))*0.91
-            self.x+=self.vx; self.y+=self.vy
+            else:   self.vx*=0.82
+
+            # ANTI-GRAVITY JUMP (One-time pulse per transformation)
+            # We use 'getattr' to prevent crashing if you haven't added the variable yet
+            if U and getattr(self, 'ghost_can_jump', True):
+                self.vy = -6.5 
+                self.ghost_can_jump = False # Locks vertical movement until reset
+                burst(particles, self.x+self.W//2, self.y+self.H, (100,160,255), 12, 3.0)
+            
+            # Apply "Heavier" Ghost Gravity (Forces a natural descent)
+            self.vy += self.GGRAV * 2.5
+            self.vy = min(self.vy, self.GMXDY) 
+            self.vy *= 0.98 # Vertical friction prevents infinite drift
+
+            self.x += self.vx
+            self.y += self.vy
+            
+            # Boundary checks
             self.x=max(0, min(self.x, COLS*TILE-self.W))
             self.y=max(-TILE*3, min(self.y, ROWS*TILE+TILE))
+
             self.trail.append((self.x+self.W//2, self.y+self.H//2))
             if len(self.trail) > 24: self.trail.pop(0)
+            
             if self.anim % 3 == 0:
                 particles.append(P(
                     self.x+self.W//2+random.uniform(-8,8),
