@@ -159,7 +159,6 @@ class Player:
     PUSH_FORCE=2.8
     GSPD=5.5; GFLOAT=4.2; GGRAV=0.03; GMXDY=2.5
     GDUR=450
-    # Double-jump
     MAX_JUMPS = 2
 
     def __init__(self, x, y):
@@ -190,14 +189,14 @@ class Player:
         elif self.gtimer <= 0:
             self.ghost=True
             self.gtimer=self.GDUR
-            self.ghost_jump_ready = True  # Reset the jump here
+            self.ghost_jump_ready = True
 
     def _safe(self, solid_rects):
         r = self.rect()
         return not any(r.colliderect(s) for s in solid_rects)
 
-    def update(self, keys, solid_rects, boxes, moving_platforms, particles, cam,
-               current_solids_ref, sound_mgr=None):
+    def update(self, keys, solid_rects, living_solid_rects, boxes, moving_platforms,
+               particles, cam, current_solids_ref, sound_mgr=None):
         self.anim += 1
         if self.dead: return
 
@@ -207,6 +206,8 @@ class Player:
         D = keys[pygame.K_DOWN]  or keys[pygame.K_s]
 
         # ── GHOST ────────────────────────────────────────
+        # Uses solid_rects only — ghost barriers are NOT included,
+        # so the ghost passes freely through T_GH_BAR / T_GH_BARD tiles.
         if self.ghost:
             self.gtimer -= 1
             if self.gtimer <= 0:
@@ -216,46 +217,44 @@ class Player:
                     burst(particles, self.x+self.W//2, self.y+self.H//2, C_RED, 24, 4.5, life=40)
                     return
 
-            # 1. HORIZONTAL MOVEMENT (Glides through walls)
+            # 1. HORIZONTAL MOVEMENT (blocked by solid walls, passes through ghost tiles)
             if R:   self.vx = min(self.vx + 1.3,  self.GSPD);  self.facing = 1
             elif L: self.vx = max(self.vx - 1.3, -self.GSPD);  self.facing = -1
             else:   self.vx *= 0.82
             self.x += self.vx
+            for s in solid_rects:
+                r = self.rect()
+                if not r.colliderect(s): continue
+                if self.vx > 0: self.x = float(s.left - self.W)
+                elif self.vx < 0: self.x = float(s.right)
+                self.vx = 0
 
-            # 2. VERTICAL MOVEMENT & 1.5x JUMP
+            # 2. VERTICAL MOVEMENT & JUMP
             if U and getattr(self, 'ghost_on_gnd', False):
-                self.vy = -10.5  # Calculated impulse for 1.5x height
+                self.vy = -10.5
                 self.ghost_on_gnd = False
                 burst(particles, self.x+self.W//2, self.y+self.H, (120, 180, 255), 15, 3.5)
                 if sound_mgr:
                     sound_mgr.play('jump')
-            
-            # Apply "Heavier" Ghost Gravity so we don't float off the map
-            # This replaces the tiny 0.03 GGRAV with a snappier 0.30
-            self.vy += 0.30 
-            self.vy = min(self.vy, 10.0) # Terminal velocity
+
+            self.vy += 0.30
+            self.vy = min(self.vy, 10.0)
             self.y += self.vy
 
             # 3. LAND ON EVERYTHING (Floors, Boxes, Moving Platforms)
             self.ghost_on_gnd = False
             r = self.rect()
-            
-            # Combine all objects the ghost can stand on
+
             landables = solid_rects + [b.rect() for b in boxes]
             mp_rects = [p.rect() for p in moving_platforms]
             all_landables = landables + mp_rects
-            
+
             for i, s in enumerate(all_landables):
                 if r.colliderect(s):
-                    # One-way landing logic: 
-                    # Only land if falling (vy > 0) AND were above the platform.
-                    # This prevents the "shooting up" glitch when walking through walls.
                     if self.vy > 0 and (self.y + self.H - self.vy) <= s.top + 5:
                         self.y = float(s.top - self.H)
                         self.vy = 0
                         self.ghost_on_gnd = True
-                        
-                        # Ride moving platforms
                         if i >= len(landables):
                             pi = i - len(landables)
                             if 0 <= pi < len(moving_platforms):
@@ -266,7 +265,7 @@ class Player:
                 if not hasattr(self, 'wall_timer'):
                     self.wall_timer = 0
                 self.wall_timer += 1
-                if self.wall_timer > 10:  # Every ~10 frames when passing through
+                if self.wall_timer > 10:
                     sound_mgr.play('wall_pass')
                     self.wall_timer = 0
             else:
@@ -279,7 +278,7 @@ class Player:
 
             self.trail.append((self.x+self.W//2, self.y+self.H//2))
             if len(self.trail) > 24: self.trail.pop(0)
-            
+
             if self.anim % 3 == 0:
                 particles.append(P(
                     self.x+self.W//2+random.uniform(-8,8),
@@ -289,6 +288,8 @@ class Player:
             return
 
         # ── LIVING ───────────────────────────────────────
+        # Uses living_solid_rects — includes ghost barriers, so living
+        # player is fully blocked by T_GH_BAR / T_GH_BARD tiles.
         self.trail.clear()
         if R:   self.vx=min(self.vx+1.1,  self.SPD);  self.facing=1
         elif L: self.vx=max(self.vx-1.1, -self.SPD);  self.facing=-1
@@ -302,7 +303,6 @@ class Player:
         else:
             self.coy=max(0, self.coy-1)
 
-        # Jump (coyote + double-jump)
         if self.jbuf > 0 and self.jumps_left > 0:
             if self.coy > 0 or self.jumps_left == self.MAX_JUMPS:
                 self.vy=self.JMP; self.coy=0; self.jbuf=0
@@ -324,24 +324,20 @@ class Player:
 
         box_rects = [b.rect() for b in boxes]
         mp_rects = [p.rect() for p in moving_platforms]
-        all_solid = solid_rects + box_rects + mp_rects
+        all_solid = living_solid_rects + box_rects + mp_rects
 
         self.x += self.vx
         for i, s in enumerate(all_solid):
             r = self.rect()
             if not r.colliderect(s):
                 continue
-
-            # If the collided object is a box, apply push
-            if len(solid_rects) <= i < len(solid_rects) + len(boxes):
-                bi = i - len(solid_rects)
+            if len(living_solid_rects) <= i < len(living_solid_rects) + len(boxes):
+                bi = i - len(living_solid_rects)
                 boxes[bi].vx = self.PUSH_FORCE * (1 if self.facing > 0 else -1)
-
             if self.vx > 0:
                 self.x = float(s.left - self.W)
             elif self.vx < 0:
                 self.x = float(s.right)
-
             self.vx = 0
 
         self.y += self.vy
@@ -352,22 +348,19 @@ class Player:
                     self.y = float(s.top - self.H)
                     self.vy = 0
                     self.on_gnd = True
-
-                    if i >= len(solid_rects) + len(boxes):
-                        pi = i - len(solid_rects) - len(boxes)
+                    if i >= len(living_solid_rects) + len(boxes):
+                        pi = i - len(living_solid_rects) - len(boxes)
                         if 0 <= pi < len(moving_platforms):
                             self.x += moving_platforms[pi].vx
-
                 elif self.vy < 0:
                     self.y = float(s.bottom)
                     self.vy = 0
 
-        # Walk sound
         if self.on_gnd and abs(self.vx) > 0.5 and sound_mgr:
             if not hasattr(self, 'walk_timer'):
                 self.walk_timer = 0
             self.walk_timer += abs(self.vx)
-            if self.walk_timer > 20:  # Every ~20 pixels
+            if self.walk_timer > 20:
                 sound_mgr.play('walk')
                 self.walk_timer = 0
 
@@ -386,7 +379,6 @@ class Player:
             near_box=any(self.rect().inflate(8,4).colliderect(b.rect()) for b in boxes)
             draw_living(surf,sx,sy,self.facing,self.vx,self.on_gnd,self.anim,near_box)
 
-        # Soul pips
         for i in range(4):
             cx=sx+3+i*6; cy=sy-9
             c = C_GREEN if i < self.cycles else (26,26,36)
@@ -394,7 +386,6 @@ class Player:
             pygame.draw.circle(surf,c,(cx,cy),3)
             pygame.draw.circle(surf,b,(cx,cy),3,1)
 
-        # Ghost bar
         if self.ghost or self.gtimer > 0:
             bw=self.W+10; bx=sx-5; by=sy-16
             f=self.gtimer/self.GDUR

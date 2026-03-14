@@ -61,7 +61,6 @@ class GameStats:
 # HUD
 # ══════════════════════════════════════════════════════════
 def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
-    # Larger panel to fit more info
     pan=pygame.Surface((320,70),pygame.SRCALPHA); pan.fill((6,4,3,200))
     surf.blit(pan,(10,10))
 
@@ -81,7 +80,6 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
          else _fsm.render("◆  LIVING",True,C_LIVING)
     surf.blit(ft,(155,20))
     
-    # Show death counter
     if stats:
         deaths_txt = _fsm.render(f"Deaths: {stats.total_deaths}", True, (120,100,80))
         surf.blit(deaths_txt, (155, 36))
@@ -108,7 +106,6 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
     ln=_fsm.render(names[min(lnum-1,5)],True,C_DIM)
     surf.blit(ln,(SW-ln.get_width()-14,14))
 
-    # Level progress dots
     for i in range(len(LEVELS)):
         cx=SW-14-i*14; cy=32
         c=C_GREEN if i < lnum else (30,30,40)
@@ -116,7 +113,7 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
 
     if hint_t > 0:
         a=min(255,hint_t*3)
-        lines=["Q — Ghost: fly through walls to scout  |  E — Activate levers  |  M — Toggle Sound",
+        lines=["Q — Ghost: blocked by solid walls, passes through ghost barriers  |  E — Activate levers  |  M — Toggle Sound",
                "Push boxes onto plates to open gates  |  Ride moving platforms  |  P — Pause"]
         for i,line in enumerate(lines):
             ht=_fsm.render(line,True,(138,125,105))
@@ -156,7 +153,6 @@ def main():
     _fmed=pygame.font.SysFont("consolas",20,bold=True)
     _fbig=pygame.font.SysFont("consolas",40,bold=True)
 
-    # Share font with player module for PUSH hint
     _player_mod._fsm = _fsm
 
     sd      =os.path.dirname(os.path.abspath(__file__))
@@ -169,7 +165,6 @@ def main():
     far_layer  = make_far_layer()
     mid_layer  = make_mid_layer()
     
-    # Initialize sound manager
     sound_mgr = None
     if SOUND_AVAILABLE:
         try:
@@ -178,7 +173,6 @@ def main():
             sound_mgr = None
             print("Could not initialize sound manager")
     
-    # Game statistics
     stats = GameStats()
 
     cur=0; hint_t=520; gt=0
@@ -229,17 +223,18 @@ def main():
             hint_t=max(0,hint_t-1)
             keys=pygame.key.get_pressed()
             
-            # Track previous state for sound effects
             prev_dead = player.dead
             prev_ghost_timer = player.gtimer
             
-            player.update(keys, level.all_solids(), level.boxes,
-                          level.moving_platforms, level.particles, cam,
-                          level_runtime._current_solids, sound_mgr)
+            # Pass both solid lists:
+            #   solid_rects       — used by ghost (no ghost barriers)
+            #   living_solid_rects — used by living player (includes ghost barriers)
+            player.update(keys, level.all_solids(), level.living_solids(),
+                          level.boxes, level.moving_platforms, level.particles,
+                          cam, level_runtime._current_solids, sound_mgr)
             level.update(player, cam, sound_mgr)
             cam.update(player.x+Player.W//2, player.y+Player.H//2)
 
-            # Death sound
             if player.dead and not prev_dead:
                 if sound_mgr:
                     sound_mgr.play('death')
@@ -270,8 +265,8 @@ def main():
             screen.blit(t2,(SW//2-t2.get_width()//2,SH//2-48))
             lines=[
                 "A lab deep underground. The Lazarus Project has failed. You must escape.",
-                "GHOST: scout the temple, fly through walls, flip levers.",
-                "LIVING: push boxes onto plates, ride moving platforms, reach the exit.",
+                "GHOST: scout the temple, blocked by walls, pass through ghost barriers.",
+                "LIVING: blocked by ALL walls including ghost barriers. Push boxes, ride platforms.",
                 "Ghost timer drains — plan where to rematerialise or die inside a wall.",
                 "Cultist guards patrol — they cannot see your ghost form.",
                 "",
@@ -297,7 +292,6 @@ def main():
                 draw_overlay(screen,"YOU ESCAPED THE TEMPLE",
                              "The Lazarus Project lives on.",C_GREEN,"R — Play again")
             
-            # Pause overlay
             if paused:
                 pov=pygame.Surface((SW,SH),pygame.SRCALPHA)
                 pov.fill((0,0,0,180))
@@ -306,8 +300,6 @@ def main():
                 screen.blit(pt,(SW//2-pt.get_width()//2,SH//2-30))
                 ps=_fmed.render("Press P to resume",True,(155,142,122))
                 screen.blit(ps,(SW//2-ps.get_width()//2,SH//2+10))
-                
-                # Show stats on pause screen
                 stat_y = SH//2 + 60
                 st1=_fsm.render(f"Total Deaths: {stats.total_deaths}",True,(120,110,95))
                 screen.blit(st1,(SW//2-st1.get_width()//2,stat_y))
