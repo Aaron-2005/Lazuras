@@ -155,7 +155,7 @@ def draw_ghost(surf, sx, sy, facing, vx, t, gfrac):
 
 class Player:
     W, H = 22, 30
-    SPD=3.8;  JMP=-11.0; GRAV=0.50; MXFALL=14.0
+    SPD=3.8;  JMP=-15.0; GRAV=0.50; MXFALL=14.0
     PUSH_FORCE=2.8
     GSPD=5.5; GFLOAT=4.2; GGRAV=0.03; GMXDY=2.5
     GDUR=450
