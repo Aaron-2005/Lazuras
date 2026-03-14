@@ -3,6 +3,9 @@
 from tileset import *
 from constants import COLS, ROWS
 
+GATE_HEIGHT = 4
+
+
 # -------------------------------------------------------
 # Layout helpers
 # -------------------------------------------------------
@@ -38,6 +41,36 @@ def shell(t, wall_tid, floor_tid, trim_tid=None):
         hwall(t, trim_tid, 1, COLS - 2, 1)
 
 
+def vwall_with_gaps(t, tid, x, y0, y1, gaps):
+    """
+    Draw a vertical wall but leave out one or more inclusive gap ranges.
+
+    gaps: list of (gap_start, gap_end) tuples, inclusive.
+    """
+    gaps = sorted(gaps)
+    cur = y0
+
+    for gap_start, gap_end in gaps:
+        if gap_end < y0 or gap_start > y1:
+            continue
+
+        gap_start = max(gap_start, y0)
+        gap_end = min(gap_end, y1)
+
+        if cur <= gap_start - 1:
+            vwall(t, tid, x, cur, gap_start - 1)
+
+        cur = max(cur, gap_end + 1)
+
+    if cur <= y1:
+        vwall(t, tid, x, cur, y1)
+
+
+def gate_gap(row, height=GATE_HEIGHT):
+    """Return the inclusive vertical gap covered by a gate."""
+    return (row, row + height - 1)
+
+
 # =======================================================
 # LEVEL 1 — learn pushing a box onto a plate
 # =======================================================
@@ -56,7 +89,7 @@ def build_level_1():
     vwall(t, G, 0, 1, ROWS - 2)
     vwall(t, G, COLS - 1, 1, ROWS - 2)
 
-    # Start ledge (not visible in screenshot, added so the level is playable)
+    # Start ledge
     plat(t, P, 1, 4, 15)
 
     # Left-side supports / blocks
@@ -72,8 +105,9 @@ def build_level_1():
     # Main right platform
     plat(t, P, 20, 28, 12)
 
-    # Upper-right wall shelf above the gate
-    hwall(t, W, 23, 28, 9)
+    # Upper-right wall shelf above the gate area
+    # Leave x=23 free because the gate sits there
+    hwall(t, W, 24, 28, 9)
 
     # Bottom supports
     vwall(t, W, 18, 14, 16)
@@ -90,19 +124,15 @@ def build_level_1():
         {'type': 'spawn', 'col': 2, 'row': 14},
         {'type': 'pad',   'col': 2, 'row': 14, 'id': 0},
 
-        # Gate blocks the right platform path until lever is used
         {'type': 'gate',  'col': 23, 'row': 9, 'id': 'gate0', 'open': False},
         {'type': 'lever', 'col': 28, 'row': 14, 'id': 'lev0', 'targets': ['gate0']},
 
-        # Moving platform over lava
-        {'type': 'mplat', 'col': 19, 'row': 15, 'axis': 'h', 'dist': 3, 'speed': 1.1},
+        {'type': 'mplat', 'col': 20, 'row': 15, 'axis': 'h', 'dist': 3, 'speed': 1.1},
 
-        # Exit on the far right
         {'type': 'exit',  'col': 28, 'row': 11},
     ]
 
     return t, objs
-
 
 
 # =======================================================
@@ -164,9 +194,12 @@ def build_level_3():
     plat(t, P, 21, 28, 8)
     plat(t, PD, 12, 15, 6)
 
-    vwall(t, S, 9, 2, ROWS - 2)
-    vwall(t, B, 19, 2, ROWS - 2)
-    vwall(t, T_GH_BARD, 19, 6, 10)
+    # Walls with full gate-sized gaps
+    vwall_with_gaps(t, S, 9, 2, ROWS - 2, [gate_gap(10)])
+    vwall_with_gaps(t, B, 19, 2, ROWS - 2, [gate_gap(8)])
+
+    # Ghost barrier with same gate-sized gap rule
+    vwall_with_gaps(t, T_GH_BARD, 19, 6, 10, [gate_gap(8)])
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -204,7 +237,7 @@ def build_level_4():
     plat(t, P, 12, 17, 11)
     plat(t, PC, 23, 28, 8)
 
-    vwall(t, S, 9, 2, ROWS - 2)
+    vwall_with_gaps(t, S, 9, 2, ROWS - 2, [gate_gap(10)])
     vwall(t, S, 20, 2, ROWS - 2)
 
     # Safety shelves around platform jumps
@@ -249,11 +282,11 @@ def build_level_5():
     plat(t, PD, 19, 24, 8)
     plat(t, FS, 26, 28, 5)
 
-    vwall(t, S, 8, 2, ROWS - 2)
-    vwall(t, S, 17, 2, ROWS - 2)
-    vwall(t, S, 25, 2, 10)
+    vwall_with_gaps(t, S, 8, 2, ROWS - 2, [gate_gap(10)])
+    vwall_with_gaps(t, S, 17, 2, ROWS - 2, [gate_gap(8)])
+    vwall_with_gaps(t, S, 25, 2, 10, [gate_gap(5)])
 
-    vwall(t, T_GH_BAR, 17, 6, 10)
+    vwall_with_gaps(t, T_GH_BAR, 17, 6, 10, [gate_gap(8)])
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -303,12 +336,12 @@ def build_level_6():
     plat(t, PD, 10, 12, 6)
     plat(t, PD, 17, 19, 4)
 
-    vwall(t, S, 6, 2, ROWS - 2)
-    vwall(t, S, 14, 2, ROWS - 2)
-    vwall(t, S, 22, 2, 10)
+    vwall_with_gaps(t, S, 6, 2, ROWS - 2, [gate_gap(10)])
+    vwall_with_gaps(t, S, 14, 2, ROWS - 2, [gate_gap(8)])
+    vwall_with_gaps(t, S, 22, 2, 10, [gate_gap(5), gate_gap(9)])
 
-    vwall(t, T_GH_BAR, 6, 6, 10)
-    vwall(t, T_GH_BARD, 14, 4, 8)
+    vwall_with_gaps(t, T_GH_BAR, 6, 6, 10, [gate_gap(10)])
+    vwall_with_gaps(t, T_GH_BARD, 14, 4, 8, [gate_gap(8)])
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
