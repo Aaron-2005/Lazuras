@@ -307,15 +307,15 @@ class Level:
                     break
 
             # Lava / hazard tiles
-            if not player.dead:
-                for hz in self.hazard_rects:
-                    if player.rect().colliderect(hz):
-                        player.dead = True
-                        cam.shake(6, 12)
-                        burst(self.particles,
-                              player.rect().centerx, player.rect().centery,
-                              C_RED, 26, 4.2, life=42)
-                        break
+        if not player.dead:
+            for hz in self.hazard_rects:
+                if player.rect().colliderect(hz):
+                    player.dead = True
+                    cam.shake(6, 12)
+                    burst(self.particles,
+                            player.rect().centerx, player.rect().centery,
+                            C_RED, 26, 4.2, life=42)
+                    break
 
             # Checkpoints
             if not player.dead:
