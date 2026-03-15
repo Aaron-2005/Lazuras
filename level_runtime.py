@@ -286,7 +286,7 @@ class Level:
 
         # Enemies
         for e in self.enemies:
-            e.update(all_s, player.rect(), player.ghost, self.particles)
+            e.update(all_s, player.rect(), player.ghost, self.particles, self.moving_platforms)
             if not player.ghost and e.alive:
                 if player.rect().colliderect(e.rect()):
                     player.dead = True
