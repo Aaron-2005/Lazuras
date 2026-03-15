@@ -18,7 +18,7 @@
 #   BACKSPACE        Edit typed level
 #   ENTER / SPACE    Start selected level
 
-import pygame, sys, math, os, random
+import pygame, sys, math, os, random, json
 from constants import *
 from tileset import TileSet
 from player import Player
@@ -40,6 +40,45 @@ import player as _player_mod
 _fsm = None
 _fmed = None
 _fbig = None
+_SAVE_FILE = "lazarus_test_save.json"
+
+
+def _save_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), _SAVE_FILE)
+
+
+def load_progress():
+    data = {'selected_level': 0, 'stats': {}}
+    try:
+        with open(_save_path(), 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            data.update(raw)
+    except Exception:
+        pass
+
+    selected = int(data.get('selected_level', 0))
+    selected = max(0, min(selected, len(LEVELS) - 1))
+    stats_data = data.get('stats', {})
+    if not isinstance(stats_data, dict):
+        stats_data = {}
+    return selected, stats_data
+
+
+def save_progress(selected_level, stats):
+    payload = {
+        'version': 1,
+        'selected_level': max(0, min(int(selected_level), len(LEVELS) - 1)),
+        'stats': stats.to_dict(),
+    }
+    try:
+        path = _save_path()
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        pass
 
 
 # ── Game state tracking ──────────────────────────────────
@@ -63,16 +102,40 @@ class GameStats:
                 DEFAULT_CYCLES - cycles_remaining
             )
 
+    def to_dict(self):
+        return {
+            'total_deaths': int(self.total_deaths),
+            'level_attempts': [int(v) for v in self.level_attempts],
+            'level_best_cycles': [int(v) for v in self.level_best_cycles],
+            'ghost_time_used': int(self.ghost_time_used),
+        }
+
+    def load_from_dict(self, data):
+        if not isinstance(data, dict):
+            return
+        self.total_deaths = max(0, int(data.get('total_deaths', self.total_deaths)))
+        self.ghost_time_used = max(0, int(data.get('ghost_time_used', self.ghost_time_used)))
+
+        attempts = data.get('level_attempts', self.level_attempts)
+        if isinstance(attempts, list):
+            for i in range(min(len(attempts), len(self.level_attempts))):
+                self.level_attempts[i] = max(0, int(attempts[i]))
+
+        best = data.get('level_best_cycles', self.level_best_cycles)
+        if isinstance(best, list):
+            for i in range(min(len(best), len(self.level_best_cycles))):
+                self.level_best_cycles[i] = max(0, int(best[i]))
+
 
 # ══════════════════════════════════════════════════════════
 # HUD
 # ══════════════════════════════════════════════════════════
 def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
-    pan = pygame.Surface((320, 70), pygame.SRCALPHA)
+    pan = pygame.Surface((340, 78), pygame.SRCALPHA)
     pan.fill((6, 4, 3, 200))
     surf.blit(pan, (10, 10))
 
-    for i in range(4):
+    for i in range(DEFAULT_CYCLES):
         cx = 22 + i * 28
         cy = 28
         alive = i < player.cycles
@@ -92,6 +155,9 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
     if stats:
         deaths_txt = _fsm.render(f"Deaths: {stats.total_deaths}", True, (120, 100, 80))
         surf.blit(deaths_txt, (155, 36))
+        ghost_secs = max(0.0, player.gtimer / FPS)
+        ghost_txt = _fsm.render(f"Ghost Timer: {ghost_secs:.1f}s", True, (120, 100, 80))
+        surf.blit(ghost_txt, (155, 50))
 
     if player.ghost or player.gtimer > 0:
         bw = 160
@@ -209,9 +275,11 @@ def main():
 
     stats = GameStats()
 
-    cur = 0
-    selected_level = 0
-    level_entry = ""
+    selected_level, saved_stats = load_progress()
+    stats.load_from_dict(saved_stats)
+
+    cur = selected_level
+    level_entry = str(selected_level + 1)
     hint_t = 520
     gt = 0
 
@@ -337,6 +405,7 @@ def main():
                 if sound_mgr:
                     sound_mgr.play('death')
                 stats.record_death(cur)
+                save_progress(selected_level, stats)
 
             if player.dead:
                 state = 'gameover' if player.cycles <= 0 else 'dead'
@@ -349,6 +418,7 @@ def main():
                 cur += 1
                 selected_level = min(cur, len(LEVELS) - 1)
                 level_entry = str(selected_level + 1)
+                save_progress(selected_level, stats)
 
                 if cur >= len(LEVELS):
                     state = 'win'
@@ -396,8 +466,6 @@ def main():
                 screen.blit(lt, (SW // 2 - lt.get_width() // 2, SH // 2 - 8 + i * 16))
 
             sel_txt = f"Selected Level: {selected_level + 1}/{len(LEVELS)}"
-            if level_entry:
-                sel_txt += f"   typed: {level_entry}"
 
             st = _fmed.render(sel_txt, True, (170, 150, 110))
             screen.blit(st, (SW // 2 - st.get_width() // 2, SH // 2 + 92))
@@ -420,7 +488,7 @@ def main():
             if state == 'dead':
                 draw_overlay(
                     screen,
-                    f"RESURRECTION  {4 - player.cycles}/4",
+                    f"RESURRECTION  {DEFAULT_CYCLES - player.cycles}/{DEFAULT_CYCLES}",
                     "The soul returns...",
                     C_ACCENT
                 )
@@ -456,6 +524,7 @@ def main():
         pygame.display.flip()
 
     pygame.quit()
+    save_progress(selected_level, stats)
     sys.exit()
 
 
