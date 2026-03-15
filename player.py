@@ -323,8 +323,11 @@ class Player:
                     return False
 
                 mp = moving_platforms[plat_idx]
+                mpr = mp.rect()
                 if mp.vx != 0:
                     new_x = self.x + mp.vx
+                    # Clamp to platform bounds to prevent sliding off edges
+                    new_x = max(float(mpr.left), min(new_x, float(mpr.right - self.W)))
                     if not _collides_at(new_x, self.y):
                         self.x = new_x
                 if mp.vy != 0:
@@ -406,10 +409,12 @@ class Player:
 
         box_rects = [b.rect() for b in boxes]
         mp_rects = [p.rect() for p in moving_platforms]
-        all_solid = living_solid_rects + box_rects + mp_rects
+        side_solids = living_solid_rects + box_rects
+        all_solid = side_solids + mp_rects
+        side_count = len(side_solids)
 
         self.x += self.vx
-        for i, s in enumerate(all_solid):
+        for i, s in enumerate(side_solids):
             r = self.rect()
             if not r.colliderect(s):
                 continue
@@ -422,17 +427,27 @@ class Player:
                 self.x = float(s.right)
             self.vx = 0
 
+        prev_top = self.y
+        prev_bottom = self.y + self.H
         self.y += self.vy
         for i, s in enumerate(all_solid):
             r = self.rect()
             if r.colliderect(s):
-                if self.vy > 0:
+                if prev_bottom <= s.top + 2:
                     self.y = float(s.top - self.H)
                     self.vy = 0
                     self.on_gnd = True
-                elif self.vy < 0:
-                    self.y = float(s.bottom)
-                    self.vy = 0
+                elif prev_top >= s.bottom - 2:
+                    if i >= side_count:
+                        # Head-bump into moving floor: push just below the
+                        # underside and force a small downward rebound so we
+                        # separate immediately instead of getting stuck.
+                        mp = moving_platforms[i - side_count]
+                        self.y = float(s.bottom + 1)
+                        self.vy = max(1.5, abs(mp.vy) + 0.8)
+                    else:
+                        self.y = float(s.bottom)
+                        self.vy = 0
 
         # Ride any moving platform we're standing on (keeps us from sliding off)
         plat_idx = None

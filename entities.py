@@ -209,12 +209,12 @@ class MovingPlatform:
     def update(self):
         if self.axis == 'h':
             self.x += self.speed*self.dir
-            self.vx  = self.speed*self.dir; self.vy=0
             if abs(self.x-self.ox) >= self.dist: self.dir *= -1
+            self.vx  = self.speed*self.dir; self.vy=0
         else:
             self.y += self.speed*self.dir
-            self.vy  = self.speed*self.dir; self.vx=0
             if abs(self.y-self.oy) >= self.dist: self.dir *= -1
+            self.vy  = self.speed*self.dir; self.vx=0
 
     def draw(self, surf, cam, t):
         sx,sy = cam.apply(int(self.x), int(self.y))
