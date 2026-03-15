@@ -339,13 +339,13 @@ class Player:
             self.jbuf = max(0, self.jbuf-1)
 
         if self.on_gnd:
-            self.coy = 10
+            self.coy = 1
             self.jumps_left = self.MAX_JUMPS
         else:
             self.coy = max(0, self.coy-1)
 
         if self.jbuf > 0 and self.jumps_left > 0:
-            if self.coy > 0 or self.jumps_left == self.MAX_JUMPS:
+            if self.coy > 0 or (self.jumps_left == self.MAX_JUMPS and self.on_gnd):
                 self.vy = self.JMP
                 self.coy = 0
                 self.jbuf = 0
@@ -354,7 +354,7 @@ class Player:
                       C_GREEN, 8, 2.0, grav=0.2, life=16, sz=2)
                 if sound_mgr:
                     sound_mgr.play('jump')
-            elif self.jumps_left > 0:
+            elif self.jumps_left > 0 and self.on_gnd:
                 self.vy = self.JMP*0.85
                 self.jbuf = 0
                 self.jumps_left -= 1
