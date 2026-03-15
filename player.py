@@ -323,11 +323,8 @@ class Player:
                     return False
 
                 mp = moving_platforms[plat_idx]
-                mpr = mp.rect()
                 if mp.vx != 0:
                     new_x = self.x + mp.vx
-                    # Clamp to platform bounds to prevent sliding off edges
-                    new_x = max(float(mpr.left), min(new_x, float(mpr.right - self.W)))
                     if not _collides_at(new_x, self.y):
                         self.x = new_x
                 if mp.vy != 0:
