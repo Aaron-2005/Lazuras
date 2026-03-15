@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "selected_level": 2,
+  "stats": {
+    "total_deaths": 16,
+    "level_attempts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      16
+    ],
+    "level_best_cycles": [
+      0,
+      0,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      4,
+      0,
+      4,
+      0,
+      0
+    ],
+    "ghost_time_used": 584
+  }
+}
