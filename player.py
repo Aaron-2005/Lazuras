@@ -289,10 +289,48 @@ class Player:
                         self.y = float(s.top - self.H)
                         self.vy = 0
                         self.ghost_on_gnd = True
-                        if i >= len(landables):
-                            pi = i - len(landables)
-                            if 0 <= pi < len(moving_platforms):
-                                self.x += moving_platforms[pi].vx
+                    elif self.vy < 0:
+                        self.y = float(s.bottom)
+                        self.vy = 0
+
+            # Ride platforms while standing on them (prevents being kicked off when they reverse)
+            # Find a platform directly under foot (within 2px tolerance)
+            plat_idx = None
+            foot_y = self.y + self.H
+            for i, mp in enumerate(moving_platforms):
+                mpr = mp.rect()
+                if (self.x + self.W > mpr.left and self.x < mpr.right
+                        and abs(foot_y - mpr.top) <= 2):
+                    plat_idx = i
+                    break
+
+            if plat_idx is not None:
+                self.ghost_on_gnd = True
+                # Move with platform but avoid being pushed through solid objects
+                def _collides_at(x, y):
+                    r = pygame.Rect(int(x), int(y), self.W, self.H)
+                    for s in solid_rects:
+                        if r.colliderect(s):
+                            return True
+                    for b in boxes:
+                        if r.colliderect(b.rect()):
+                            return True
+                    for j, mp2 in enumerate(moving_platforms):
+                        if j == plat_idx:
+                            continue
+                        if r.colliderect(mp2.rect()):
+                            return True
+                    return False
+
+                mp = moving_platforms[plat_idx]
+                if mp.vx != 0:
+                    new_x = self.x + mp.vx
+                    if not _collides_at(new_x, self.y):
+                        self.x = new_x
+                if mp.vy != 0:
+                    new_y = self.y + mp.vy
+                    if not _collides_at(self.x, new_y):
+                        self.y = new_y
 
             # Wall pass sound
             if sound_mgr and any(r.colliderect(s) for s in solid_rects):
@@ -392,13 +430,46 @@ class Player:
                     self.y = float(s.top - self.H)
                     self.vy = 0
                     self.on_gnd = True
-                    if i >= len(living_solid_rects) + len(boxes):
-                        pi = i - len(living_solid_rects) - len(boxes)
-                        if 0 <= pi < len(moving_platforms):
-                            self.x += moving_platforms[pi].vx
                 elif self.vy < 0:
                     self.y = float(s.bottom)
                     self.vy = 0
+
+        # Ride any moving platform we're standing on (keeps us from sliding off)
+        plat_idx = None
+        foot_y = self.y + self.H
+        for i, mp in enumerate(moving_platforms):
+            mpr = mp.rect()
+            if (self.x + self.W > mpr.left and self.x < mpr.right
+                    and abs(foot_y - mpr.top) <= 2):
+                plat_idx = i
+                break
+
+        if plat_idx is not None:
+            self.on_gnd = True
+            def _collides_at(nx, ny):
+                r = pygame.Rect(int(nx), int(ny), self.W, self.H)
+                for s in living_solid_rects:
+                    if r.colliderect(s):
+                        return True
+                for b in box_rects:
+                    if r.colliderect(b):
+                        return True
+                for j, mp2 in enumerate(moving_platforms):
+                    if j == plat_idx:
+                        continue
+                    if r.colliderect(mp2.rect()):
+                        return True
+                return False
+
+            mp = moving_platforms[plat_idx]
+            if mp.vx != 0:
+                new_x = self.x + mp.vx
+                if not _collides_at(new_x, self.y):
+                    self.x = new_x
+            if mp.vy != 0:
+                new_y = self.y + mp.vy
+                if not _collides_at(self.x, new_y):
+                    self.y = new_y
 
         if self.on_gnd and abs(self.vx) > 0.5 and sound_mgr:
             if not hasattr(self, 'walk_timer'):
