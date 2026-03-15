@@ -177,7 +177,7 @@ def build_prelude_4():
         "..............###.............",
         "..............#.#.............",
         "..............#.#.............",
-        ".....---......#.#....---......",
+        "..............#.#....---......",
         "..............#.#.............",
         "..............#.#.............",
         "..---.........#.#.........--..",
@@ -198,7 +198,7 @@ def build_prelude_4():
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 15},
         {'type': 'pad',   'col': 2, 'row': 15, 'id': 0},
-        {'type': 'mplat', 'col': 10, 'row': 12, 'axis': 'h', 'dist': 4, 'speed': 1.1},
+        {'type': 'mplat', 'col': 6, 'row': 10, 'axis': 'h', 'dist': 4, 'speed': 1.1},
         {'type': 'exit',  'col': 22, 'row': 9},
     ]
     return t, objs
@@ -298,7 +298,7 @@ def build_level_1():
         {'type': 'pad',   'col': 2, 'row': 14, 'id': 0},
         {'type': 'gate',  'col': 23, 'row': 9, 'id': 'gate0', 'open': False},
         {'type': 'lever', 'col': 28, 'row': 14, 'id': 'lev0', 'targets': ['gate0']},
-        {'type': 'mplat', 'col': 20, 'row': 15, 'axis': 'h', 'dist': 3, 'speed': 1.1},
+        {'type': 'mplat', 'col': 21, 'row': 15, 'axis': 'h', 'dist': 2, 'speed': 1.1},
         {'type': 'exit',  'col': 28, 'row': 11},
     ]
     return t, objs
@@ -349,6 +349,7 @@ def build_new_level():
     objs = [
         {'type': 'spawn', 'col': 1, 'row': 16},
         {'type': 'pad',   'col': 1, 'row': 16, 'id': 0},
+        {'type': 'enemy', 'col': 10, 'row': 14, 'patrol': 2},
         {'type': 'mplat', 'col': 16, 'row': 10, 'axis': 'h', 'dist': 3, 'speed': 1.2},
         {'type': 'mplat', 'col': 22, 'row': 12, 'axis': 'h', 'dist': 3, 'speed': 1.2},
         {'type': 'mplat', 'col': 16, 'row': 14, 'axis': 'h', 'dist': 3, 'speed': 1.2},
@@ -404,6 +405,7 @@ def build_new_level_v1():
         {'type': 'pad',   'col': 1, 'row': 12, 'id': 0},
 
         # From your sketch
+        {'type': 'enemy', 'col': 10, 'row': 12, 'patrol': 2},
         {'type': 'lever', 'col': 2, 'row': 8,  'id': 'lev0', 'targets': ['gate0']},
         {'type': 'gate',  'col': 5, 'row': 10, 'id': 'gate1', 'open': False},
         {'type': 'gate', 'col': 5, 'row': 6, 'id': 'gate0', 'open': False},
@@ -530,9 +532,10 @@ def build_level_3():
         {'type': 'box', 'col': 4, 'row': 13},
         {'type': 'plate', 'col': 6, 'row': 13, 'id': 0, 'targets': ['gate0']},
         {'type': 'gate', 'col': 9, 'row': 10, 'id': 'gate0', 'open': False},
-        {'type': 'lever', 'col': 13, 'row': 5, 'id': 'lev0', 'targets': ['gate1']},
+        {'type': 'lever', 'col': 13, 'row': 8, 'id': 'lev0', 'targets': ['gate1']},
         {'type': 'gate', 'col': 19, 'row': 4, 'id': 'gate1', 'open': False},
         {'type': 'enemy', 'col': 14, 'row': 10, 'patrol': 2},
+        {'type': 'enemy', 'col': 13 , 'row': 15, 'patrol': 2},
         {'type': 'spike', 'col': 22, 'row': 16},
         {'type': 'spike', 'col': 23, 'row': 16},
         {'type': 'spike', 'col': 24, 'row': 16},
@@ -594,9 +597,9 @@ def build_level_4():
         {'type': 'pad', 'col': 2, 'row': 13, 'id': 0},
         {'type': 'lever', 'col': 5, 'row': 8, 'id': 'lev0', 'targets': ['gate0']},
         {'type': 'gate', 'col': 9, 'row': 10, 'id': 'gate0', 'open': False},
-        {'type': 'mplat', 'col': 8, 'row': 12, 'axis': 'h', 'dist': 4, 'speed': 1.2},
-        {'type': 'mplat', 'col': 19, 'row': 9, 'axis': 'v', 'dist': 3, 'speed': 1.0},
-        {'type': 'enemy', 'col': 14, 'row': 10, 'patrol': 2},
+        {'type': 'mplat', 'col': 13, 'row': 12, 'axis': 'h', 'dist': 3, 'speed': 1.2},
+        {'type': 'mplat', 'col': 19, 'row': 7, 'axis': 'v', 'dist': 3, 'speed': 1.0},
+        {'type': 'enemy', 'col': 13, 'row': 12, 'patrol': 2},
         {'type': 'exit', 'col': 26, 'row': 7},
         {'type': 'pad', 'col': 24, 'row': 7, 'id': 1},
     ]
@@ -612,10 +615,10 @@ def build_split_tower_ghost_gate():
     tile_rows = [
         "........................G.....",
         "........................G.....",
+        "........................G.....",
+        "........................G.....",
+        "........................G.....",
         "--......................G.....",
-        "........................G.....",
-        "...-....................G.....",
-        "........................G.....",
         "........................G.....",
         ".....-..................G.....",
         "........................G.....",
@@ -642,8 +645,9 @@ def build_split_tower_ghost_gate():
     objs = [
         {'type': 'spawn', 'col': 3,  'row': 14},
         {'type': 'pad',   'col': 3,  'row': 14, 'id': 0},
-
-        {'type': 'lever', 'col': 0,  'row': 1,  'id': 'lev0', 'targets': ['gate0']},
+        {'type': 'enemy', 'col': 10, 'row': 5, 'patrol': 2},
+        {'type': 'enemy', 'col': 20, 'row': 5, 'patrol': 2},
+        {'type': 'lever', 'col': 0,  'row': 4,  'id': 'lev0', 'targets': ['gate0']},
         {'type': 'gate',  'col': 15, 'row': 2,  'id': 'gate0', 'open': False},
 
         {'type': 'exit',  'col': 27, 'row': 8},
@@ -710,10 +714,9 @@ def build_level_5():
         {'type': 'plate', 'col': 13, 'row': 10, 'id': 1, 'targets': ['gate1']},
         {'type': 'gate', 'col': 8, 'row': 10, 'id': 'gate0', 'open': False},
         {'type': 'gate', 'col': 17, 'row': 6, 'id': 'gate1', 'open': False},
-        {'type': 'mplat', 'col': 7, 'row': 12, 'axis': 'h', 'dist': 2, 'speed': 1.4},
-        {'type': 'mplat', 'col': 18, 'row': 9, 'axis': 'h', 'dist': 3, 'speed': 1.3},
-        {'type': 'enemy', 'col': 12, 'row': 10, 'patrol': 2},
-        {'type': 'enemy', 'col': 21, 'row': 7, 'patrol': 2},
+        {'type': 'mplat', 'col': 11, 'row': 5, 'axis': 'h', 'dist': 2, 'speed': 1.4},
+        {'type': 'mplat', 'col': 22, 'row': 9, 'axis': 'h', 'dist': 3, 'speed': 1.3},
+        {'type': 'enemy', 'col': 22, 'row': 9, 'patrol': 2},
         {'type': 'exit', 'col': 27, 'row': 4},
         {'type': 'spike', 'col': 1, 'row': 15},
         {'type': 'spike', 'col': 2, 'row': 15},
@@ -793,7 +796,7 @@ def build_level_6():
 
         {'type': 'gate',  'col': 9,  'row': 8, 'id': 'gate0', 'open': False},
         {'type': 'gate',  'col': 23, 'row': 9, 'id': 'gate1', 'open': False},
-
+        {'type': 'enemy', 'col': 15, 'row': 6, 'patrol': 2},
         {'type': 'exit',  'col': 29, 'row': 12},
     ]
 
@@ -877,8 +880,8 @@ LEVELS = [
     build_prelude_5,
     build_level_1,
     build_new_level,
-    build_new_level_v1,
     build_level_2,
+    build_new_level_v1,
     build_level_3,
     build_split_tower_ghost_gate,
     build_level_4,
