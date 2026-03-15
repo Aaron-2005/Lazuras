@@ -158,37 +158,62 @@ class Player:
     SPD=3.8;  JMP=-15.0; GRAV=0.50; MXFALL=14.0
     PUSH_FORCE=2.8
     GSPD=5.5; GFLOAT=4.2; GGRAV=0.03; GMXDY=2.5
-    GDUR=450
+
+    MAX_GHOST_BURSTS = 2
+    GHOST_BURST_FRAMES = 300   # 5 seconds at 60 FPS
+
     MAX_JUMPS = 2
 
     def __init__(self, x, y):
-        self.cycles=4; self.spawn_x=float(x); self.spawn_y=float(y)
+        self.cycles = 4
+        self.spawn_x = float(x)
+        self.spawn_y = float(y)
+        self.ghost_bursts_left = self.MAX_GHOST_BURSTS
         self._init()
 
     def _init(self):
-        self.x=self.spawn_x; self.y=self.spawn_y
-        self.vx=self.vy=0.0; self.on_gnd=False
-        self.ghost=False; self.gtimer=0; self.dead=False
-        self.anim=0; self.facing=1; self.coy=0; self.jbuf=0
-        self.trail=[]; self.inventory=None
+        self.x = self.spawn_x
+        self.y = self.spawn_y
+        self.vx = self.vy = 0.0
+        self.on_gnd = False
+        self.ghost = False
+        self.gtimer = 0
+        self.dead = False
+        self.anim = 0
+        self.facing = 1
+        self.coy = 0
+        self.jbuf = 0
+        self.trail = []
+        self.inventory = None
         self.jumps_left = self.MAX_JUMPS
         self.ghost_jump_ready = True
+        self.ghost_on_gnd = False
 
-    def set_spawn(self, x, y): self.spawn_x=float(x); self.spawn_y=float(y)
+    def set_spawn(self, x, y):
+        self.spawn_x = float(x)
+        self.spawn_y = float(y)
+
+    def reset_ghost_bursts(self):
+        self.ghost_bursts_left = self.MAX_GHOST_BURSTS
 
     def respawn(self):
-        self.dead   = False
+        self.dead = False
+        bursts_left = self.ghost_bursts_left
         self._init()
+        self.ghost_bursts_left = bursts_left
 
-    def rect(self): return pygame.Rect(int(self.x), int(self.y), self.W, self.H)
+    def rect(self):
+        return pygame.Rect(int(self.x), int(self.y), self.W, self.H)
 
     def toggle_ghost(self, solid_rects):
         if self.ghost:
-            if self._safe(solid_rects): self.ghost=False
-        elif self.gtimer <= 0:
-            self.ghost=True
-            self.gtimer=self.GDUR
+            if self._safe(solid_rects):
+                self.ghost = False
+        elif self.ghost_bursts_left > 0:
+            self.ghost = True
+            self.gtimer = self.GHOST_BURST_FRAMES
             self.ghost_jump_ready = True
+            self.ghost_bursts_left -= 1
 
     def _safe(self, solid_rects):
         r = self.rect()
@@ -197,7 +222,8 @@ class Player:
     def update(self, keys, solid_rects, living_solid_rects, boxes, moving_platforms,
                particles, cam, current_solids_ref, sound_mgr=None):
         self.anim += 1
-        if self.dead: return
+        if self.dead:
+            return
 
         L = keys[pygame.K_LEFT]  or keys[pygame.K_a]
         R = keys[pygame.K_RIGHT] or keys[pygame.K_d]
@@ -205,31 +231,40 @@ class Player:
         D = keys[pygame.K_DOWN]  or keys[pygame.K_s]
 
         # ── GHOST ────────────────────────────────────────
-        # Uses solid_rects only — ghost barriers are NOT included,
-        # so the ghost passes freely through T_GH_BAR / T_GH_BARD tiles.
         if self.ghost:
             self.gtimer -= 1
             if self.gtimer <= 0:
-                self.ghost = False; self.gtimer = 0
+                self.ghost = False
+                self.gtimer = 0
                 if not self._safe(solid_rects):
-                    self.dead = True; cam.shake(7, 14)
+                    self.dead = True
+                    cam.shake(7, 14)
                     burst(particles, self.x+self.W//2, self.y+self.H//2, C_RED, 24, 4.5, life=40)
                     return
 
-            # 1. HORIZONTAL MOVEMENT (blocked by solid walls, passes through ghost tiles)
-            if R:   self.vx = min(self.vx + 1.3,  self.GSPD);  self.facing = 1
-            elif L: self.vx = max(self.vx - 1.3, -self.GSPD);  self.facing = -1
-            else:   self.vx *= 0.82
+            # 1. HORIZONTAL MOVEMENT
+            if R:
+                self.vx = min(self.vx + 1.3, self.GSPD)
+                self.facing = 1
+            elif L:
+                self.vx = max(self.vx - 1.3, -self.GSPD)
+                self.facing = -1
+            else:
+                self.vx *= 0.82
+
             self.x += self.vx
             for s in solid_rects:
                 r = self.rect()
-                if not r.colliderect(s): continue
-                if self.vx > 0: self.x = float(s.left - self.W)
-                elif self.vx < 0: self.x = float(s.right)
+                if not r.colliderect(s):
+                    continue
+                if self.vx > 0:
+                    self.x = float(s.left - self.W)
+                elif self.vx < 0:
+                    self.x = float(s.right)
                 self.vx = 0
 
             # 2. VERTICAL MOVEMENT & JUMP
-            if U and getattr(self, 'ghost_on_gnd', False):
+            if U and self.ghost_on_gnd:
                 self.vy = -10.5
                 self.ghost_on_gnd = False
                 burst(particles, self.x+self.W//2, self.y+self.H, (120, 180, 255), 15, 3.5)
@@ -240,7 +275,7 @@ class Player:
             self.vy = min(self.vy, 10.0)
             self.y += self.vy
 
-            # 3. LAND ON EVERYTHING (Floors, Boxes, Moving Platforms)
+            # 3. LAND ON EVERYTHING
             self.ghost_on_gnd = False
             r = self.rect()
 
@@ -276,7 +311,8 @@ class Player:
             self.y = max(-TILE*3, min(self.y, ROWS*TILE+TILE))
 
             self.trail.append((self.x+self.W//2, self.y+self.H//2))
-            if len(self.trail) > 24: self.trail.pop(0)
+            if len(self.trail) > 24:
+                self.trail.pop(0)
 
             if self.anim % 3 == 0:
                 particles.append(P(
@@ -287,31 +323,40 @@ class Player:
             return
 
         # ── LIVING ───────────────────────────────────────
-        # Uses living_solid_rects — includes ghost barriers, so living
-        # player is fully blocked by T_GH_BAR / T_GH_BARD tiles.
         self.trail.clear()
-        if R:   self.vx=min(self.vx+1.1,  self.SPD);  self.facing=1
-        elif L: self.vx=max(self.vx-1.1, -self.SPD);  self.facing=-1
-        else:   self.vx*=0.70
+        if R:
+            self.vx = min(self.vx+1.1, self.SPD)
+            self.facing = 1
+        elif L:
+            self.vx = max(self.vx-1.1, -self.SPD)
+            self.facing = -1
+        else:
+            self.vx *= 0.70
 
-        if U: self.jbuf=8
-        else: self.jbuf=max(0, self.jbuf-1)
+        if U:
+            self.jbuf = 8
+        else:
+            self.jbuf = max(0, self.jbuf-1)
 
         if self.on_gnd:
-            self.coy=10; self.jumps_left=self.MAX_JUMPS
+            self.coy = 10
+            self.jumps_left = self.MAX_JUMPS
         else:
-            self.coy=max(0, self.coy-1)
+            self.coy = max(0, self.coy-1)
 
         if self.jbuf > 0 and self.jumps_left > 0:
             if self.coy > 0 or self.jumps_left == self.MAX_JUMPS:
-                self.vy=self.JMP; self.coy=0; self.jbuf=0
+                self.vy = self.JMP
+                self.coy = 0
+                self.jbuf = 0
                 self.jumps_left -= 1
                 burst(particles, self.x+self.W//2, self.y+self.H,
                       C_GREEN, 8, 2.0, grav=0.2, life=16, sz=2)
                 if sound_mgr:
                     sound_mgr.play('jump')
             elif self.jumps_left > 0:
-                self.vy=self.JMP*0.85; self.jbuf=0
+                self.vy = self.JMP*0.85
+                self.jbuf = 0
                 self.jumps_left -= 1
                 burst(particles, self.x+self.W//2, self.y+self.H//2,
                       C_ACCENT, 10, 2.5, grav=0.15, life=18, sz=2)
@@ -372,11 +417,11 @@ class Player:
                 ts=pygame.Surface((r2*2,r2*2),pygame.SRCALPHA)
                 pygame.draw.circle(ts,(65,95,245,a),(r2,r2),r2)
                 surf.blit(ts,(tsx-r2,tsy-r2))
-            draw_ghost(surf,sx,sy,self.facing,self.vx,self.anim,
-                       self.gtimer/self.GDUR)
+            draw_ghost(surf, sx, sy, self.facing, self.vx, self.anim,
+                       self.gtimer / self.GHOST_BURST_FRAMES)
         else:
-            near_box=any(self.rect().inflate(8,4).colliderect(b.rect()) for b in boxes)
-            draw_living(surf,sx,sy,self.facing,self.vx,self.on_gnd,self.anim,near_box)
+            near_box = any(self.rect().inflate(8,4).colliderect(b.rect()) for b in boxes)
+            draw_living(surf, sx, sy, self.facing, self.vx, self.on_gnd, self.anim, near_box)
 
         for i in range(4):
             cx=sx+3+i*6; cy=sy-9
@@ -386,16 +431,20 @@ class Player:
             pygame.draw.circle(surf,b,(cx,cy),3,1)
 
         if self.ghost or self.gtimer > 0:
-            bw=self.W+10; bx=sx-5; by=sy-16
-            f=self.gtimer/self.GDUR
-            pygame.draw.rect(surf,(10,10,28),(bx,by,bw,4))
-            bc=(75,135,255) if f > 0.3 else (215,55,55)
-            pygame.draw.rect(surf,bc,(bx,by,int(bw*f),4))
-            pygame.draw.rect(surf,(125,155,228),(bx,by,int(bw*f),4),1)
+            bw = self.W + 10
+            bx = sx - 5
+            by = sy - 16
+            f = self.gtimer / self.GHOST_BURST_FRAMES if self.GHOST_BURST_FRAMES > 0 else 0
+            pygame.draw.rect(surf, (10,10,28), (bx,by,bw,4))
+            bc = (75,135,255) if f > 0.3 else (215,55,55)
+            pygame.draw.rect(surf, bc, (bx,by,int(bw*f),4))
+            pygame.draw.rect(surf, (125,155,228), (bx,by,int(bw*f),4), 1)
 
         if self.ghost:
-            r=self.rect(); danger=any(r.colliderect(s) for s in current_solids)
+            r = self.rect()
+            danger = any(r.colliderect(s) for s in current_solids)
             if danger:
-                da=int(160*abs(math.sin(self.anim*0.32)))
-                ds=pygame.Surface((self.W+8,5),pygame.SRCALPHA)
-                ds.fill((255,55,55,da)); surf.blit(ds,(sx-4,sy+self.H+2))
+                da = int(160*abs(math.sin(self.anim*0.32)))
+                ds = pygame.Surface((self.W+8,5), pygame.SRCALPHA)
+                ds.fill((255,55,55,da))
+                surf.blit(ds, (sx-4, sy+self.H+2))

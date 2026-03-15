@@ -1,16 +1,22 @@
-# main.py — The Lazarus Project
-# To run: python3 main.py
+# test_main.py — The Lazarus Project (test launcher with level select)
+# To run: python3 test_main.py
 # Requires: pip install pygame
 # lazarus_tileset.png must be in the same directory
 #
 # CONTROLS
 #   A/D or ←/→       Walk
-#   W/↑/SPACE         Jump (living) | Float up (ghost)
-#   S/↓               Float down (ghost)
-#   Q                 Toggle ghost form
-#   E                 Activate lever (near one)
-#   R                 Restart level
-#   ESC               Quit
+#   W/↑/SPACE        Jump (living)
+#   S/↓              Float down (ghost, if your player supports it)
+#   Q                Toggle ghost form
+#   E                Activate lever (near one)
+#   R                Restart level
+#   ESC              Quit
+#
+# TEST TITLE CONTROLS
+#   LEFT / RIGHT     Change selected level
+#   Type digits      Enter level number (e.g. 12, 13)
+#   BACKSPACE        Edit typed level
+#   ENTER / SPACE    Start selected level
 
 import pygame, sys, math, os, random
 from constants import *
@@ -31,7 +37,7 @@ except ImportError:
 # ── font refs shared across modules ─────────────────────
 import player as _player_mod
 
-_fsm  = None
+_fsm = None
 _fmed = None
 _fbig = None
 
@@ -91,7 +97,10 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
         bw = 160
         bx = 14
         by2 = 66
-        f = player.gtimer / player.GHOST_BURST_FRAMES
+        max_timer = getattr(player, "GHOST_BURST_FRAMES", 1)
+        f = player.gtimer / max_timer if max_timer > 0 else 0
+        f = max(0, min(1, f))
+
         bg2 = pygame.Surface((bw, 6), pygame.SRCALPHA)
         bg2.fill((8, 8, 24, 200))
         surf.blit(bg2, (bx, by2))
@@ -104,7 +113,14 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
                           (75, 115, 195) if player.ghost else (48, 48, 75))
         surf.blit(lbl, (bx, by2 + 9))
     else:
-        rl = _fsm.render("SOUL READY  [Q]", True, (58, 158, 78))
+        if hasattr(player, "ghost_bursts_left") and hasattr(player, "MAX_GHOST_BURSTS"):
+            rl = _fsm.render(
+                f"GHOST BURSTS: {player.ghost_bursts_left}/{player.MAX_GHOST_BURSTS}",
+                True,
+                (58, 158, 78) if player.ghost_bursts_left > 0 else (185, 70, 70)
+            )
+        else:
+            rl = _fsm.render("SOUL READY  [Q]", True, (58, 158, 78))
         surf.blit(rl, (14, 66))
 
     names = [
@@ -115,7 +131,8 @@ def draw_hud(surf, player, lnum, hint_t, gt, stats=None):
         "V · THE HAUNTED AQUEDUCT",
         "VI · THE LAZARUS CHAMBER"
     ]
-    ln = _fsm.render(names[min(lnum - 1, 5)], True, C_DIM)
+    level_label = names[lnum - 1] if 1 <= lnum <= len(names) else f"LEVEL {lnum}"
+    ln = _fsm.render(level_label, True, C_DIM)
     surf.blit(ln, (SW - ln.get_width() - 14, 14))
 
     for i in range(len(LEVELS)):
@@ -163,7 +180,7 @@ def main():
 
     pygame.init()
     screen = pygame.display.set_mode((SW, SH))
-    pygame.display.set_caption("THE LAZARUS PROJECT")
+    pygame.display.set_caption("THE LAZARUS PROJECT — TEST")
     clock = pygame.time.Clock()
 
     _fsm = pygame.font.SysFont("consolas", 13)
@@ -186,13 +203,15 @@ def main():
     if SOUND_AVAILABLE:
         try:
             sound_mgr = SoundManager(enabled=True)
-        except:
+        except Exception:
             sound_mgr = None
             print("Could not initialize sound manager")
 
     stats = GameStats()
 
     cur = 0
+    selected_level = 0
+    level_entry = ""
     hint_t = 520
     gt = 0
 
@@ -202,6 +221,8 @@ def main():
         sx, sy = lvl.spawn_pos
         p = Player(sx, sy - Player.H)
         p.cycles = cycles
+        if hasattr(p, "reset_ghost_bursts"):
+            p.reset_ghost_bursts()
         return lvl, p
 
     level, player = load(cur)
@@ -217,8 +238,6 @@ def main():
         state_t += 1
 
         interact_pressed = False
-
-        # Track previous state before updates
         prev_dead = player.dead if state == 'play' and not paused else False
 
         for ev in pygame.event.get():
@@ -229,37 +248,66 @@ def main():
                 if ev.key == pygame.K_ESCAPE:
                     running = False
 
-                if ev.key == pygame.K_p and state == 'play':
-                    paused = not paused
-
                 if ev.key == pygame.K_m and sound_mgr:
                     sound_mgr.toggle()
 
                 if state == 'title':
-                    state = 'play'
-                    state_t = 0
+                    if ev.key == pygame.K_LEFT:
+                        selected_level = max(0, selected_level - 1)
+                        level_entry = ""
 
-                elif state == 'play' and not paused:
-                    if ev.key == pygame.K_q:
-                        prev_ghost = player.ghost
-                        player.toggle_ghost(level.all_solids())
-                        if sound_mgr and prev_ghost != player.ghost:
-                            sound_mgr.play('ghost_on' if player.ghost else 'ghost_off')
+                    elif ev.key == pygame.K_RIGHT:
+                        selected_level = min(len(LEVELS) - 1, selected_level + 1)
+                        level_entry = ""
 
-                    if ev.key == pygame.K_e:
-                        interact_pressed = True
+                    elif ev.key == pygame.K_BACKSPACE:
+                        level_entry = level_entry[:-1]
+                        if level_entry:
+                            n = int(level_entry)
+                            selected_level = max(0, min(len(LEVELS) - 1, n - 1))
 
-                    if ev.key == pygame.K_r:
-                        level, player = load(cur, player.cycles)
+                    elif ev.unicode.isdigit():
+                        if len(level_entry) < 3:
+                            level_entry += ev.unicode
+                            n = int(level_entry)
+                            if n >= 1:
+                                selected_level = max(0, min(len(LEVELS) - 1, n - 1))
+
+                    elif ev.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        if level_entry:
+                            n = int(level_entry)
+                            selected_level = max(0, min(len(LEVELS) - 1, n - 1))
+                        cur = selected_level
+                        level, player = load(cur)
                         state = 'play'
                         state_t = 0
                         hint_t = 200
 
+                elif state == 'play':
+                    if ev.key == pygame.K_p:
+                        paused = not paused
+
+                    if not paused:
+                        if ev.key == pygame.K_q:
+                            prev_ghost = player.ghost
+                            player.toggle_ghost(level.all_solids())
+                            if sound_mgr and prev_ghost != player.ghost:
+                                sound_mgr.play('ghost_on' if player.ghost else 'ghost_off')
+
+                        if ev.key == pygame.K_e:
+                            interact_pressed = True
+
+                        if ev.key == pygame.K_r:
+                            level, player = load(cur, player.cycles)
+                            state = 'play'
+                            state_t = 0
+                            hint_t = 200
+
                 elif state in ('dead', 'gameover', 'win'):
                     if ev.key == pygame.K_r:
                         if state in ('gameover', 'win'):
-                            cur = 0
-                            level, player = load(0, DEFAULT_CYCLES)
+                            cur = selected_level
+                            level, player = load(cur, DEFAULT_CYCLES)
                         else:
                             level, player = load(cur, player.cycles)
                         state = 'play'
@@ -284,7 +332,6 @@ def main():
             level.update(player, cam, interact_pressed, sound_mgr)
             cam.update(player.x + Player.W // 2, player.y + Player.H // 2)
 
-            # Death event: subtract a life exactly once when death first happens
             if player.dead and not prev_dead:
                 player.cycles = max(0, player.cycles - 1)
                 if sound_mgr:
@@ -300,6 +347,9 @@ def main():
                     sound_mgr.play('exit')
                 stats.record_level_complete(cur, player.cycles)
                 cur += 1
+                selected_level = min(cur, len(LEVELS) - 1)
+                level_entry = str(selected_level + 1)
+
                 if cur >= len(LEVELS):
                     state = 'win'
                     state_t = 0
@@ -315,34 +365,52 @@ def main():
 
         # ── RENDER ──────────────────────────────────────
         screen.fill(C_BG)
+
         if state == 'title':
             screen.blit(far_layer, (0, 0))
             screen.blit(mid_layer, (0, 0))
+
             ov = pygame.Surface((SW, SH), pygame.SRCALPHA)
             ov.fill((0, 0, 0, 140))
             screen.blit(ov, (0, 0))
 
             t1 = _fbig.render("THE LAZARUS PROJECT", True, C_ACCENT)
-            screen.blit(t1, (SW // 2 - t1.get_width() // 2, SH // 2 - 100))
+            screen.blit(t1, (SW // 2 - t1.get_width() // 2, SH // 2 - 110))
 
-            t2 = _fmed.render("An underground temple escape  —  6 levels", True, (120, 105, 80))
-            screen.blit(t2, (SW // 2 - t2.get_width() // 2, SH // 2 - 48))
+            t2 = _fmed.render(
+                f"Testing launcher  —  {len(LEVELS)} levels",
+                True,
+                (120, 105, 80)
+            )
+            screen.blit(t2, (SW // 2 - t2.get_width() // 2, SH // 2 - 60))
 
             lines = [
-                "A lab deep underground. The Lazarus Project has failed. You must escape.",
-                "GHOST: scout the temple, blocked by walls, pass through ghost barriers.",
-                "LIVING: blocked by ALL walls including ghost barriers. Push boxes, ride platforms.",
-                "Ghost timer drains — plan where to rematerialise or die inside a wall.",
-                "Cultist guards patrol — they cannot see your ghost form.",
+                "Choose any level to jump straight in.",
+                "LEFT / RIGHT changes level.",
+                "Type digits for larger level numbers, then press ENTER.",
                 "",
                 "Controls: A/D - Move | W/SPACE - Jump | E - Use Lever | Q - Ghost Toggle | P - Pause | M - Sound"
             ]
             for i, line in enumerate(lines):
                 lt = _fsm.render(line, True, (90, 80, 62))
-                screen.blit(lt, (SW // 2 - lt.get_width() // 2, SH // 2 + 2 + i * 16))
+                screen.blit(lt, (SW // 2 - lt.get_width() // 2, SH // 2 - 8 + i * 16))
 
-            pt = _fmed.render("Press any key", True, (70, 62, 48))
-            screen.blit(pt, (SW // 2 - pt.get_width() // 2, SH // 2 + 140))
+            sel_txt = f"Selected Level: {selected_level + 1}/{len(LEVELS)}"
+            if level_entry:
+                sel_txt += f"   typed: {level_entry}"
+
+            st = _fmed.render(sel_txt, True, (170, 150, 110))
+            screen.blit(st, (SW // 2 - st.get_width() // 2, SH // 2 + 92))
+
+            pt = _fmed.render("ENTER / SPACE to start", True, (70, 62, 48))
+            screen.blit(pt, (SW // 2 - pt.get_width() // 2, SH // 2 + 128))
+
+            ct = _fsm.render(
+                "BACKSPACE edits typed number",
+                True,
+                (95, 88, 75)
+            )
+            screen.blit(ct, (SW // 2 - ct.get_width() // 2, SH // 2 + 158))
 
         else:
             level.draw(screen, cam, far_layer, mid_layer, player, gt, _fsm)
