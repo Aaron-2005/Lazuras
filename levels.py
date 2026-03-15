@@ -532,7 +532,7 @@ def build_level_3():
         {'type': 'box', 'col': 4, 'row': 13},
         {'type': 'plate', 'col': 6, 'row': 13, 'id': 0, 'targets': ['gate0']},
         {'type': 'gate', 'col': 9, 'row': 10, 'id': 'gate0', 'open': False},
-        {'type': 'lever', 'col': 13, 'row': 8, 'id': 'lev0', 'targets': ['gate1']},
+        {'type': 'lever', 'col': 13, 'row': 5, 'id': 'lev0', 'targets': ['gate1']},
         {'type': 'gate', 'col': 19, 'row': 4, 'id': 'gate1', 'open': False},
         {'type': 'enemy', 'col': 14, 'row': 10, 'patrol': 2},
         {'type': 'enemy', 'col': 13 , 'row': 15, 'patrol': 2},
