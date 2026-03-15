@@ -177,7 +177,6 @@ class Player:
     def set_spawn(self, x, y): self.spawn_x=float(x); self.spawn_y=float(y)
 
     def respawn(self):
-        self.cycles = max(0, self.cycles-1)
         self.dead   = False
         self._init()
 

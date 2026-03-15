@@ -175,7 +175,7 @@ class Level:
                     self.gates[tid].open=False
                     self.gates[tid].y=float(self.gates[tid].base_y)
 
-    def update(self, player, cam, sound_mgr=None):
+    def update(self, player, cam, interact_pressed=False, sound_mgr=None):
         global _current_solids
         self.t+=1; self.reached_exit=False
         all_s=self.all_solids()
@@ -207,11 +207,11 @@ class Level:
                 self._deactivate_targets(plate.targets)
 
         # Levers
+        # Levers
         for lv in self.levers:
             lv.update()
             if not player.ghost:
-                prev=lv.active
-                changed=lv.try_activate(player.rect(), self.particles)
+                changed = lv.try_activate(player.rect(), interact_pressed, self.particles)
                 if changed:
                     if lv.active:
                         self._activate_targets(lv.targets, self.particles, sound_mgr)

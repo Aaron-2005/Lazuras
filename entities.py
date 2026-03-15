@@ -115,11 +115,16 @@ class Lever:
         self.active=False
         self._cooldown=0
 
-    def rect(self): return pygame.Rect(self.x-4, self.y, self.W+8, self.H)
+    def rect(self):
+        return pygame.Rect(self.x-4, self.y, self.W+8, self.H)
 
-    def try_activate(self, player_rect, particles):
-        if self._cooldown > 0: return False
-        if self.rect().colliderect(player_rect):
+    def interact_rect(self):
+        return self.rect().inflate(20, 12)
+
+    def try_activate(self, player_rect, interact_pressed, particles):
+        if self._cooldown > 0:
+            return False
+        if interact_pressed and self.interact_rect().colliderect(player_rect):
             self.active = not self.active
             self._cooldown = 30
             burst(particles, self.x+self.W//2, self.y, C_GOLD, 12, 2.0, life=24)
@@ -127,7 +132,8 @@ class Lever:
         return False
 
     def update(self):
-        if self._cooldown > 0: self._cooldown -= 1
+        if self._cooldown > 0:
+            self._cooldown -= 1
 
     def draw(self, surf, cam, t):
         sx,sy = cam.apply(self.x, self.y)
