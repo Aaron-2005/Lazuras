@@ -1,148 +1,81 @@
-# levels.py — reworked progression with cleaner puzzle flow
+# levels.py — all levels rewritten in row-based sketch style
 
 from tileset import *
 from constants import COLS, ROWS
 
-GATE_HEIGHT = 4
 
-
-# -------------------------------------------------------
-# Layout helpers
-# -------------------------------------------------------
-def hwall(t, tid, x0, x1, y):
-    for x in range(x0, x1 + 1):
-        t.append((tid, x, y))
-
-
-def vwall(t, tid, x, y0, y1):
-    for y in range(y0, y1 + 1):
-        t.append((tid, x, y))
-
-
-def plat(t, tid, x0, x1, y):
-    for x in range(x0, x1 + 1):
-        t.append((tid, x, y))
-
-
-def fill_rect(t, tid, x0, y0, x1, y1):
-    for y in range(y0, y1 + 1):
-        for x in range(x0, x1 + 1):
-            t.append((tid, x, y))
-
-
-def shell(t, wall_tid, floor_tid, trim_tid=None):
-    """Common room shell."""
-    hwall(t, wall_tid, 0, COLS - 1, 0)
-    hwall(t, floor_tid, 0, COLS - 1, ROWS - 1)
-    vwall(t, wall_tid, 0, 1, ROWS - 2)
-    vwall(t, wall_tid, COLS - 1, 1, ROWS - 2)
-    hwall(t, floor_tid, 1, COLS - 2, ROWS - 2)
-    if trim_tid is not None:
-        hwall(t, trim_tid, 1, COLS - 2, 1)
-
-
-def vwall_with_gaps(t, tid, x, y0, y1, gaps):
-    """
-    Draw a vertical wall but leave out one or more inclusive gap ranges.
-
-    gaps: list of (gap_start, gap_end) tuples, inclusive.
-    """
-    gaps = sorted(gaps)
-    cur = y0
-
-    for gap_start, gap_end in gaps:
-        if gap_end < y0 or gap_start > y1:
-            continue
-
-        gap_start = max(gap_start, y0)
-        gap_end = min(gap_end, y1)
-
-        if cur <= gap_start - 1:
-            vwall(t, tid, x, cur, gap_start - 1)
-
-        cur = max(cur, gap_end + 1)
-
-    if cur <= y1:
-        vwall(t, tid, x, cur, y1)
-
-
-def gate_gap(row, height=GATE_HEIGHT):
-    """Return the inclusive vertical gap covered by a gate."""
-    return (row, row + height - 1)
+def build_tiles(tile_rows, tile_map):
+    t = []
+    for row, line in enumerate(tile_rows):
+        if len(line) != COLS:
+            raise ValueError(
+                f"Row {row} has length {len(line)} but expected {COLS}: {line}"
+            )
+        for col, ch in enumerate(line):
+            if ch in tile_map:
+                t.append((tile_map[ch], col, row))
+    return t
 
 
 # =======================================================
-# LEVEL 1 — learn pushing a box onto a plate
+# LEVEL 1 — learn moving platform + lever + gate + exit
 # =======================================================
 def build_level_1():
-    """Editor sketch level: moving platform + lever + gate + exit."""
-    G = T_GH_BAR
     W = T_W_DARK
     P = T_PL_STONE
-    H = T_PL_HAZ
+    G = T_GH_BAR
+    L = T_LAZ_FL
 
-    t = []
+    tile_rows = [
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G............................G",
+        "G.......................#####G",
+        "G..............--............G",
+        "G..........-.................G",
+        "G......--...........---------G",
+        "G...#-.......................G",
+        "#...#.............#..........G",
+        "G---#.............#........--G",
+        "G...#LLLLLLLLLLLLL#LLLLLLLL#.G",
+        "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
+    ]
 
-    # Outer ghost barrier frame
-    hwall(t, G, 0, COLS - 1, 0)
-    hwall(t, G, 0, COLS - 1, ROWS - 1)
-    vwall(t, G, 0, 1, ROWS - 2)
-    vwall(t, G, COLS - 1, 1, ROWS - 2)
+    tile_map = {
+        "#": W,
+        "-": P,
+        "G": G,
+        "L": L,
+    }
 
-    # Start ledge
-    plat(t, P, 1, 4, 15)
-
-    # Left-side supports / blocks
-    t.append((W, 0, 14))
-    vwall(t, W, 4, 13, 16)
-    t.append((P, 5, 13))
-
-    # Stepping platforms
-    plat(t, P, 7, 8, 12)
-    t.append((P, 11, 11))
-    plat(t, P, 15, 16, 10)
-
-    # Main right platform
-    plat(t, P, 20, 28, 12)
-
-    # Upper-right wall shelf above the gate area
-    # Leave x=23 free because the gate sits there
-    hwall(t, W, 24, 28, 9)
-
-    # Bottom supports
-    vwall(t, W, 18, 14, 16)
-    vwall(t, W, 27, 15, 16)
-
-    # Small lever island on the right
-    plat(t, P, 27, 28, 15)
-
-    # Lava floor
-    plat(t, H, 5, 17, 16)
-    plat(t, H, 19, 26, 16)
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 14},
         {'type': 'pad',   'col': 2, 'row': 14, 'id': 0},
-
         {'type': 'gate',  'col': 23, 'row': 9, 'id': 'gate0', 'open': False},
         {'type': 'lever', 'col': 28, 'row': 14, 'id': 'lev0', 'targets': ['gate0']},
-
         {'type': 'mplat', 'col': 20, 'row': 15, 'axis': 'h', 'dist': 3, 'speed': 1.1},
-
         {'type': 'exit',  'col': 28, 'row': 11},
     ]
-
     return t, objs
 
 
+# =======================================================
+# LEVEL 2 — your new sketch-style level
+# =======================================================
 def build_new_level():
     W = T_W_DARK
     F = T_FL_ANC
     P = T_PL_STONE
     G = T_GH_BAR
-    H = T_PL_HAZ
-
-    t = []
+    H = T_LAZ_FL
 
     tile_rows = [
         "..........#...........G.......",
@@ -161,8 +94,8 @@ def build_new_level():
         ".....#........................",
         ".-...#........................",
         ".....#....---.................",
-        ".....#HHHH....................",
-        "=====#HHHH....................",
+        ".....#........................",
+        "=====#HHHHHHHHHHHHHHHHHHHHHHHH",
     ]
 
     tile_map = {
@@ -174,26 +107,21 @@ def build_new_level():
         'L': T_LAZ_FL,
     }
 
-    for row, line in enumerate(tile_rows):
-        for col, ch in enumerate(line):
-            if ch in tile_map:
-                t.append((tile_map[ch], col, row))
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 1, 'row': 16},
         {'type': 'pad',   'col': 1, 'row': 16, 'id': 0},
-
         {'type': 'mplat', 'col': 16, 'row': 10, 'axis': 'h', 'dist': 3, 'speed': 1.2},
         {'type': 'mplat', 'col': 22, 'row': 12, 'axis': 'h', 'dist': 3, 'speed': 1.2},
         {'type': 'mplat', 'col': 16, 'row': 14, 'axis': 'h', 'dist': 3, 'speed': 1.2},
-
         {'type': 'exit',  'col': 27, 'row': 8},
     ]
-
     return t, objs
 
+
 # =======================================================
-# LEVEL 2 — first ghost route
+# LEVEL 3 — first ghost route
 # =======================================================
 def build_level_2():
     S = T_W_SAND
@@ -202,18 +130,42 @@ def build_level_2():
     FS = T_FL_SIL
     P = T_PL_STONE
     PS = T_PL_SIL
+    C = T_W_CARVE
+    G = T_GH_BAR
 
-    t = []
-    shell(t, D, F, T_W_CARVE)
+    tile_rows = [
+        "##############################",
+        "#cccccccccccccccccccccccccccc#",
+        "#.........w..................#",
+        "#.........w..................#",
+        "#.........w..................#",
+        "#.........w..................#",
+        "#.........w..................#",
+        "#.........G..................#",
+        "#.........G..........pppppppp#",
+        "#.........G..................#",
+        "#.........G..................#",
+        "#.........G.-------..........#",
+        "#.........w..................#",
+        "#.........w..................#",
+        "#sssssssssw..................#",
+        "#.........w..................#",
+        "#=========w==================#",
+        "==============================",
+    ]
 
-    plat(t, FS, 1, 9, 14)
-    plat(t, P, 12, 18, 11)
-    plat(t, PS, 21, 28, 8)
+    tile_map = {
+        "#": D,
+        "c": C,
+        "w": S,
+        "s": FS,
+        "-": P,
+        "p": PS,
+        "=": F,
+        "G": G,
+    }
 
-    vwall(t, S, 10, 2, ROWS - 2)
-
-    # Ghost-only path in the first divider
-    vwall(t, T_GH_BAR, 10, 7, 11)
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -231,7 +183,7 @@ def build_level_2():
 
 
 # =======================================================
-# LEVEL 3 — lever + box combo
+# LEVEL 4 — lever + box combo
 # =======================================================
 def build_level_3():
     S = T_W_SAND
@@ -242,21 +194,44 @@ def build_level_3():
     P = T_PL_STONE
     PC = T_PL_CARVE
     PD = T_PL_DARK
+    C = T_W_CARVE
+    G = T_GH_BARD
 
-    t = []
-    shell(t, D, F, T_W_CARVE)
+    tile_rows = [
+        "##############################",
+        "#cccccccccccccccccccccccccccc#",
+        "#........w.........b.........#",
+        "#........w.........b.........#",
+        "#........w.........b.........#",
+        "#........w.........b.........#",
+        "#........w..dddd...g.........#",
+        "#........w.........g.........#",
+        "#........w...........--------#",
+        "#........w...................#",
+        "#............................#",
+        "#..........ppppppp...........#",
+        "#..................b.........#",
+        "#..................b.........#",
+        "#ssssssssw.........b.........#",
+        "#........w.........b.........#",
+        "#========w=========b=========#",
+        "==============================",
+    ]
 
-    plat(t, FS, 1, 8, 14)
-    plat(t, PC, 11, 17, 11)
-    plat(t, P, 21, 28, 8)
-    plat(t, PD, 12, 15, 6)
+    tile_map = {
+        "#": D,
+        "c": C,
+        "w": S,
+        "b": B,
+        "g": G,
+        "s": FS,
+        "p": PC,
+        "-": P,
+        "d": PD,
+        "=": F,
+    }
 
-    # Walls with full gate-sized gaps
-    vwall_with_gaps(t, S, 9, 2, ROWS - 2, [gate_gap(10)])
-    vwall_with_gaps(t, B, 19, 2, ROWS - 2, [gate_gap(8)])
-
-    # Ghost barrier with same gate-sized gap rule
-    vwall_with_gaps(t, T_GH_BARD, 19, 6, 10, [gate_gap(8)])
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -277,7 +252,7 @@ def build_level_3():
 
 
 # =======================================================
-# LEVEL 4 — moving platform tutorial
+# LEVEL 5 — moving platform tutorial
 # =======================================================
 def build_level_4():
     S = T_W_COBB
@@ -286,20 +261,42 @@ def build_level_4():
     FS = T_FL_DKSIL
     P = T_PL_STONE
     PC = T_PL_CARVE
+    PD = T_PL_DARK
+    C = T_W_CARVE
 
-    t = []
-    shell(t, D, F, T_W_CARVE)
+    tile_rows = [
+        "##############################",
+        "#cccccccccccccccccccccccccccc#",
+        "#........w..........w........#",
+        "#........w...................#",
+        "#........w...................#",
+        "#........w..........w........#",
+        "#........w....ddd...w........#",
+        "#........w..........w........#",
+        "#........w..........w..pppppp#",
+        "#...ddd..w..........w........#",
+        "#...................w........#",
+        "#...........------..w........#",
+        "#...................w........#",
+        "#...................w........#",
+        "#sssssss.w..........w........#",
+        "#........w..........w........#",
+        "#========w==========w========#",
+        "==============================",
+    ]
 
-    plat(t, FS, 1, 7, 14)
-    plat(t, P, 12, 17, 11)
-    plat(t, PC, 23, 28, 8)
+    tile_map = {
+        "#": D,
+        "c": C,
+        "w": S,
+        "s": FS,
+        "-": P,
+        "p": PC,
+        "d": PD,
+        "=": F,
+    }
 
-    vwall_with_gaps(t, S, 9, 2, ROWS - 2, [gate_gap(10)])
-    vwall(t, S, 20, 2, ROWS - 2)
-
-    # Safety shelves around platform jumps
-    plat(t, T_PL_DARK, 4, 6, 9)
-    plat(t, T_PL_DARK, 14, 16, 6)
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -320,7 +317,7 @@ def build_level_4():
 
 
 # =======================================================
-# LEVEL 5 — two boxes, two switches, more timing
+# LEVEL 6 — two boxes, two switches, more timing
 # =======================================================
 def build_level_5():
     S = T_W_BSLT
@@ -330,20 +327,43 @@ def build_level_5():
     P = T_PL_MOSS
     PB = T_PL_BONE
     PD = T_PL_DARK
+    M = T_W_MOSS
+    G = T_GH_BAR
 
-    t = []
-    shell(t, D, F, T_W_MOSS)
+    tile_rows = [
+        "##############################",
+        "#mmmmmmmmmmmmmmmmmmmmmmmmmmmm#",
+        "#.......w........w...........#",
+        "#.......w........w...........#",
+        "#.......w........w...........#",
+        "#.......w........w........sss#",
+        "#.......w........G...........#",
+        "#.......w........G...........#",
+        "#.......w..........dddddd....#",
+        "#.......w................w...#",
+        "#........................w...#",
+        "#.........bbbbbb.............#",
+        "#................w...........#",
+        "#................w...........#",
+        "#pppppp.w........w...........#",
+        "#.......w........w...........#",
+        "#=======w========w===========#",
+        "==============================",
+    ]
 
-    plat(t, P, 1, 6, 14)
-    plat(t, PB, 10, 15, 11)
-    plat(t, PD, 19, 24, 8)
-    plat(t, FS, 26, 28, 5)
+    tile_map = {
+        "#": D,
+        "m": M,
+        "w": S,
+        "s": FS,
+        "p": P,
+        "b": PB,
+        "d": PD,
+        "G": G,
+        "=": F,
+    }
 
-    vwall_with_gaps(t, S, 8, 2, ROWS - 2, [gate_gap(10)])
-    vwall_with_gaps(t, S, 17, 2, ROWS - 2, [gate_gap(8)])
-    vwall_with_gaps(t, S, 25, 2, 10, [gate_gap(5)])
-
-    vwall_with_gaps(t, T_GH_BAR, 17, 6, 10, [gate_gap(8)])
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
@@ -370,35 +390,53 @@ def build_level_5():
 
 
 # =======================================================
-# LEVEL 6 — final mixed-mechanics stage
+# LEVEL 7 — final mixed-mechanics stage
 # =======================================================
 def build_level_6():
     S = T_W_IRON
     D = T_W_OBS
     F = T_LAZ_FL
-    FS = T_FL_DKSIL
     P = T_PL_CARVE
     PL = T_LAZ_WL
     PD = T_PL_DARK
+    C = T_W_CARVE
+    G = T_GH_BAR
+    GD = T_GH_BARD
 
-    t = []
-    shell(t, D, F, T_W_CARVE)
+    tile_rows = [
+        "##############################",
+        "#cccccccccccccccccccccccccccc#",
+        "#.....w.......w..............#",
+        "#.....w.......w..............#",
+        "#.....w.......g..ddd.........#",
+        "#.....w.......g........WWWWWW#",
+        "#.....G...ddd.g..............#",
+        "#.....G.......g..............#",
+        "#.WWW.G......................#",
+        "#.....G........ddddd.........#",
+        "#............................#",
+        "#............................#",
+        "#.......ppppp.w..............#",
+        "#.............w..............#",
+        "#pppppw.......w..............#",
+        "#.....w.......w..............#",
+        "#LLLLLwLLLLLLLwLLLLLLLLLLLLLL#",
+        "LLLLLLLLLLLLLLLLLLLLLLLLLLLLLL",
+    ]
 
-    plat(t, P, 1, 5, 14)
-    plat(t, P, 8, 12, 12)
-    plat(t, PD, 15, 19, 9)
-    plat(t, PL, 23, 28, 5)
+    tile_map = {
+        "#": D,
+        "c": C,
+        "w": S,
+        "p": P,
+        "W": PL,
+        "d": PD,
+        "G": G,
+        "g": GD,
+        "L": F,
+    }
 
-    plat(t, PL, 2, 4, 8)
-    plat(t, PD, 10, 12, 6)
-    plat(t, PD, 17, 19, 4)
-
-    vwall_with_gaps(t, S, 6, 2, ROWS - 2, [gate_gap(10)])
-    vwall_with_gaps(t, S, 14, 2, ROWS - 2, [gate_gap(8)])
-    vwall_with_gaps(t, S, 22, 2, 10, [gate_gap(5), gate_gap(9)])
-
-    vwall_with_gaps(t, T_GH_BAR, 6, 6, 10, [gate_gap(10)])
-    vwall_with_gaps(t, T_GH_BARD, 14, 4, 8, [gate_gap(8)])
+    t = build_tiles(tile_rows, tile_map)
 
     objs = [
         {'type': 'spawn', 'col': 2, 'row': 13},
