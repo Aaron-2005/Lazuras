@@ -407,7 +407,8 @@ class Player:
             if self.walk_timer > 20:
                 sound_mgr.play('walk')
                 self.walk_timer = 0
-
+        self.x = max(0, min(self.x, COLS*TILE - self.W))
+        self.y = max(0, min(self.y, ROWS*TILE - self.H))
     def draw(self, surf, cam, boxes, current_solids):
         sx, sy = cam.apply(int(self.x), int(self.y))
         if self.ghost:
