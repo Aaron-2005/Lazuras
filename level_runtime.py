@@ -109,10 +109,14 @@ class Level:
         # Second pass — build collision rects from resolved map only.
         for (col, row), tid in self.tile_map.items():
             rect = pygame.Rect(col * TILE, row * TILE, TILE, TILE)
+
             if tid in SOLID_TILES:
                 self.solid_rects.append(rect)
+
             if tid in GHOST_TILES:
                 self.ghost_barrier_rects.append(rect)
+
+            # Lava/hazards stay damaging but are not solid.
             if tid in (T_PL_HAZ, T_LAZ_FL, T_LAZ_WL):
                 self.hazard_rects.append(rect)
 
@@ -422,9 +426,9 @@ class Level:
             alpha = 150 + int(70 * math.sin(gt * 0.07 + col * 0.4)) if player.ghost else 28
             surf.blit(self.tileset.get(tid[0], tid[1], alpha), (sx, sy))
 
-        # Solid tiles
+        # Solid tiles + lava visuals
         for (col, row), tid in self.tile_map.items():
-            if tid not in SOLID_TILES:
+            if tid not in SOLID_TILES and tid not in (T_LAZ_FL, T_LAZ_WL):
                 continue
 
             sx, sy = cam.apply(col * TILE, row * TILE)
