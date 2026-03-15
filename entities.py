@@ -234,10 +234,8 @@ class Enemy:
     JUMP_FORCE = -8.0
     GRAVITY = 0.5
     MAX_FALL = 12.0
-    DETECTION_RANGE = 200
-    CHASE_RANGE = 300
     ATTACK_RANGE = 40
-    MEMORY_TIME = 180  # frames to remember player position
+    MEMORY_TIME = 90  # frames to keep chasing after losing sight
 
     def __init__(self, col, row, patrol_dist):
         self.ox=col*TILE; self.oy=row*TILE
@@ -247,234 +245,155 @@ class Enemy:
         self.anim=random.randint(0,60)
         self.alive=True
         self.alert=False; self.alert_t=0
-        
+
         # AI state
-        self.state = 'patrol'  # patrol, chase, attack
-        self.target_x = None
-        self.target_y = None
-        self.last_player_x = None
-        self.last_player_y = None
-        self.memory_timer = 0
-        self.path = []
-        self.path_index = 0
-        self.jump_timer = 0
+        self.state = 'patrol'   # patrol, chase, attack
         self.vx = 0.0
         self.vy = 0.0
         self.on_ground = False
+        self.jump_timer = 0
+
+        # Wander (random movement when not on same platform)
+        self.wander_timer = random.randint(30, 90)
+        self.wander_dir = random.choice([-1, 1])
+
+        # Memory
+        self.last_player_x = None
+        self.memory_timer = 0
 
     def rect(self): return pygame.Rect(int(self.x), int(self.y), self.W, self.H)
 
-    def _get_tile_pos(self, x, y):
-        """Convert world position to tile coordinates"""
-        return int(x // TILE), int(y // TILE)
-
     def _world_to_tile(self, wx, wy):
-        """Convert world coordinates to tile grid"""
         return int(wx // TILE), int(wy // TILE)
 
-    def _tile_to_world(self, tx, ty):
-        """Convert tile coordinates to world position (center of tile)"""
-        return tx * TILE + TILE//2, ty * TILE + TILE//2
-
     def _is_solid(self, tx, ty, solid_rects):
-        """Check if a tile position is solid"""
         if tx < 0 or tx >= COLS or ty < 0 or ty >= ROWS:
             return True
         world_x, world_y = tx * TILE, ty * TILE
         test_rect = pygame.Rect(world_x, world_y, TILE, TILE)
         return any(test_rect.colliderect(s) for s in solid_rects)
 
-    def _can_stand_at(self, tx, ty, solid_rects):
-        """Check if enemy can stand at tile position (solid below, empty above)"""
-        if self._is_solid(tx, ty, solid_rects):
+    def _on_same_platform(self, player_rect, solid_rects):
+        """
+        Returns True only if the enemy and player are standing on
+        the same horizontal surface (feet within 1 tile vertically,
+        no solid tile gap between them at foot level).
+        """
+        e_foot_y = self.y + self.H
+        p_foot_y = player_rect.bottom
+
+        # Must be on roughly the same vertical level (within 1 tile)
+        if abs(e_foot_y - p_foot_y) > TILE * 1.2:
             return False
-        # Check if there's solid ground below
-        return self._is_solid(tx, ty + 1, solid_rects)
 
-    def _find_path(self, start_tx, start_ty, goal_tx, goal_ty, solid_rects, max_steps=50):
-        """Simple A* pathfinding"""
-        from heapq import heappop, heappush
-        
-        def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
-        
-        frontier = []
-        heappush(frontier, (0, start_tx, start_ty))
-        came_from = {}
-        cost_so_far = {}
-        came_from[(start_tx, start_ty)] = None
-        cost_so_far[(start_tx, start_ty)] = 0
-        
-        while frontier:
-            current_cost, current_tx, current_ty = heappop(frontier)
-            
-            if (current_tx, current_ty) == (goal_tx, goal_ty):
-                break
-            
-            if current_cost > max_steps:
-                break
-            
-            # Check neighbors (up, down, left, right)
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                next_tx, next_ty = current_tx + dx, current_ty + dy
-                
-                if not self._can_stand_at(next_tx, next_ty, solid_rects):
-                    continue
-                
-                new_cost = cost_so_far[(current_tx, current_ty)] + 1
-                if (next_tx, next_ty) not in cost_so_far or new_cost < cost_so_far[(next_tx, next_ty)]:
-                    cost_so_far[(next_tx, next_ty)] = new_cost
-                    priority = new_cost + heuristic((next_tx, next_ty), (goal_tx, goal_ty))
-                    heappush(frontier, (priority, next_tx, next_ty))
-                    came_from[(next_tx, next_ty)] = (current_tx, current_ty)
-        
-        # Reconstruct path
-        if (goal_tx, goal_ty) not in came_from:
-            return []
-        
-        path = []
-        current = (goal_tx, goal_ty)
-        while current is not None:
-            path.append(current)
-            current = came_from[current]
-        path.reverse()
-        return path
+        # Walk tiles between them at foot level — all must be empty
+        e_tx = int(self.x // TILE)
+        p_tx = int(player_rect.centerx // TILE)
+        foot_ty = int((e_foot_y + 2) // TILE)   # tile just below feet
 
-    def _has_line_of_sight(self, target_x, target_y, solid_rects):
-        """Check if enemy has direct line of sight to target"""
-        enemy_center_x = self.x + self.W // 2
-        enemy_center_y = self.y + self.H // 2
-        
-        # Simple line of sight check - cast ray to target
-        dx = target_x - enemy_center_x
-        dy = target_y - enemy_center_y
-        distance = math.hypot(dx, dy)
-        
-        if distance == 0:
-            return True
-        
-        # Check points along the line
-        steps = int(distance / 8)  # Check every 8 pixels
-        for i in range(steps + 1):
-            t = i / steps
-            check_x = enemy_center_x + dx * t
-            check_y = enemy_center_y + dy * t
-            
-            # Check if this point is inside a solid tile
-            tx, ty = self._world_to_tile(check_x, check_y)
-            if self._is_solid(tx, ty, solid_rects):
-                return False
-        
+        left_tx  = min(e_tx, p_tx)
+        right_tx = max(e_tx, p_tx)
+
+        for tx in range(left_tx, right_tx + 1):
+            # There must be solid ground below each tile we walk over
+            if not self._is_solid(tx, foot_ty, solid_rects):
+                return False  # gap in the platform — not connected
+
         return True
 
+    def _ground_ahead(self, solid_rects):
+        """Check there's solid ground one step ahead (edge detection)."""
+        check_x = self.x + (self.W + 2 if self.dir > 0 else -4)
+        check_tx, check_ty = self._world_to_tile(check_x, self.y + self.H + 4)
+        return self._is_solid(check_tx, check_ty, solid_rects)
+
+    def _wall_ahead(self, solid_rects):
+        """Check for a wall directly in front."""
+        check_x = self.x + (self.W + 2 if self.dir > 0 else -2)
+        check_tx, check_ty = self._world_to_tile(check_x, self.y + self.H // 2)
+        return self._is_solid(check_tx, check_ty, solid_rects)
+
     def _update_ai(self, player_rect, player_ghost, solid_rects):
-        """Update AI state and behavior"""
         if player_ghost:
-            # Can't see ghost form
+            self.state = 'patrol'
+            self.memory_timer = 0
+            return
+
+        same_platform = self._on_same_platform(player_rect, solid_rects)
+        dx = player_rect.centerx - (self.x + self.W // 2)
+        dist = abs(dx)
+
+        if same_platform and dist <= self.ATTACK_RANGE:
+            self.state = 'attack'
+            self.memory_timer = self.MEMORY_TIME
+            self.last_player_x = player_rect.centerx
+
+        elif same_platform:
+            # Player is on same platform but further away — chase
+            self.state = 'chase'
+            self.memory_timer = self.MEMORY_TIME
+            self.last_player_x = player_rect.centerx
+
+        else:
+            # Different platform — count down memory then go back to wander
             if self.memory_timer > 0:
                 self.memory_timer -= 1
+                # Keep chasing last known x briefly
+                self.state = 'chase'
             else:
                 self.state = 'patrol'
-                self.target_x = None
-                self.target_y = None
-            return
-        
-        player_center_x = player_rect.centerx
-        player_center_y = player_rect.centery
-        enemy_center_x = self.x + self.W // 2
-        enemy_center_y = self.y + self.H // 2
-        
-        distance = math.hypot(player_center_x - enemy_center_x, player_center_y - enemy_center_y)
-        
-        # Update memory
-        self.last_player_x = player_center_x
-        self.last_player_y = player_center_y
-        self.memory_timer = self.MEMORY_TIME
-        
-        # State transitions
-        if distance <= self.ATTACK_RANGE:
-            self.state = 'attack'
-        elif distance <= self.CHASE_RANGE and self._has_line_of_sight(player_center_x, player_center_y, solid_rects):
-            self.state = 'chase'
-        elif self.memory_timer > 0:
-            self.state = 'chase'  # Chase to last known position
-        else:
-            self.state = 'patrol'
-        
-        # Set targets based on state
-        if self.state == 'chase' or self.state == 'attack':
-            if self._has_line_of_sight(player_center_x, player_center_y, solid_rects):
-                self.target_x = player_center_x
-                self.target_y = player_center_y
-            elif self.last_player_x is not None:
-                self.target_x = self.last_player_x
-                self.target_y = self.last_player_y
-        else:
-            self.target_x = None
-            self.target_y = None
-
-    def _move_towards_target(self, solid_rects):
-        """Move towards current target using pathfinding if needed"""
-        if self.target_x is None:
-            return
-        
-        enemy_center_x = self.x + self.W // 2
-        enemy_center_y = self.y + self.H // 2
-        
-        # If close enough, stop
-        distance = math.hypot(self.target_x - enemy_center_x, self.target_y - enemy_center_y)
-        if distance < 20:
-            self.vx = 0
-            return
-        
-        # Try direct movement first
-        dx = self.target_x - enemy_center_x
-        dy = self.target_y - enemy_center_y
-        
-        # Normalize direction
-        if abs(dx) > 0:
-            self.vx = self.SPD if dx > 0 else -self.SPD
-            self.facing = 1 if dx > 0 else -1
-        
-        # Check if we need to jump
-        if dy < -20 and self.on_ground and self.jump_timer <= 0:
-            # Check if there's an obstacle in front
-            check_x = enemy_center_x + (20 if self.facing > 0 else -20)
-            check_tx, check_ty = self._world_to_tile(check_x, enemy_center_y)
-            if self._is_solid(check_tx, check_ty, solid_rects):
-                self.vy = self.JUMP_FORCE
-                self.jump_timer = 30  # Cooldown between jumps
-                self.on_ground = False
 
     def update(self, solid_rects, player_rect, player_ghost, particles):
         if not self.alive: return
         self.anim += 1
-        
-        # Update AI
+
         self._update_ai(player_rect, player_ghost, solid_rects)
-        
-        # Update timers
+
         if self.jump_timer > 0:
             self.jump_timer -= 1
-        
-        # Apply gravity
+
+        # Gravity
         self.vy = min(self.vy + self.GRAVITY, self.MAX_FALL)
-        
-        # Movement
+
+        # --- Movement ---
         if self.state == 'patrol':
-            # Original patrol behavior
-            self.x += self.SPD * self.dir
+            # Random wander: pick a new direction periodically
+            self.wander_timer -= 1
+            if self.wander_timer <= 0:
+                self.wander_dir = random.choice([-1, 1])
+                self.wander_timer = random.randint(40, 120)
+
+            # Edge + wall check
+            self.dir = self.wander_dir
+            if not self._ground_ahead(solid_rects) or self._wall_ahead(solid_rects):
+                self.wander_dir *= -1
+                self.dir = self.wander_dir
+                self.wander_timer = random.randint(30, 80)
+
+            self.x += self.SPD * 0.6 * self.dir   # wander slower than chase
             self.facing = self.dir
-            if abs(self.x - self.ox) >= self.patrol_dist:
-                self.dir *= -1
-        else:
-            # AI movement
-            self._move_towards_target(solid_rects)
-            self.x += self.vx
-        
+
+        elif self.state in ('chase', 'attack'):
+            target_x = self.last_player_x if self.last_player_x else (self.x + self.W // 2)
+            dx = target_x - (self.x + self.W // 2)
+
+            if abs(dx) > 8:
+                self.dir = 1 if dx > 0 else -1
+                self.facing = self.dir
+
+                # Edge + wall check — stop at platform edge while chasing
+                if self._ground_ahead(solid_rects) and not self._wall_ahead(solid_rects):
+                    self.x += self.SPD * self.dir
+                else:
+                    # Hit edge or wall — if there's a wall, try to jump it
+                    if self._wall_ahead(solid_rects) and self.on_ground and self.jump_timer <= 0:
+                        self.vy = self.JUMP_FORCE
+                        self.jump_timer = 40
+                        self.on_ground = False
+
         # Clamp to world
-        self.x = max(0, min(self.x, (COLS-1)*TILE - self.W))
-        
+        self.x = max(0, min(self.x, (COLS - 1) * TILE - self.W))
+
         # Horizontal collision
         r = self.rect()
         for s in solid_rects:
@@ -485,8 +404,8 @@ class Enemy:
                     self.x = float(s.right)
                 self.vx = 0
                 break
-        
-        # Vertical movement and collision
+
+        # Vertical collision
         self.y += self.vy
         self.on_ground = False
         r = self.rect()
@@ -500,8 +419,8 @@ class Enemy:
                     self.y = float(s.bottom)
                     self.vy = 0
                 break
-        
-        # Alert state (for visual feedback)
+
+        # Alert state
         self.alert = self.state in ['chase', 'attack']
         if self.alert:
             self.alert_t = 60
@@ -528,9 +447,9 @@ class Enemy:
         pygame.draw.rect(surf,bc,(sx+2,sy+7,14,13))
         # Cloak sides
         pygame.draw.polygon(surf,(55,20,20),
-            [(sx,sy+10),(sx+2,sy+7),(sx+2,sy+20),(sx-2,sy+22)])
+                            [(sx,sy+10),(sx+2,sy+7),(sx+2,sy+20),(sx-2,sy+22)])
         pygame.draw.polygon(surf,(55,20,20),
-            [(sx+18,sy+10),(sx+16,sy+7),(sx+16,sy+20),(sx+20,sy+22)])
+                            [(sx+18,sy+10),(sx+16,sy+7),(sx+16,sy+20),(sx+20,sy+22)])
 
         # Arms
         pygame.draw.rect(surf,bc,(sx+16,sy+8,4,10))
@@ -539,28 +458,14 @@ class Enemy:
         # Hood / head
         pygame.draw.ellipse(surf,(42,16,16),(sx+2,sy-2,14,14))
         pygame.draw.ellipse(surf,(20,8,8),  (sx+4,sy+1,10,8))
-        
-        # Glowing eyes - different colors based on state
+
+        # Glowing eyes
         if self.state == 'attack':
-            eye_color = (255, 100, 100)  # Red for attack
+            eye_color = (80, 160, 255)   # bright blue for attack
         elif self.state == 'chase':
-            eye_color = (255, 150, 100)  # Orange for chase
+            eye_color = (120, 200, 255)  # lighter blue for chase
         else:
-            eye_color = (255, 60, 60)    # Default red
-        
-        ea=int(180+60*math.sin(self.anim*0.18))
+            eye_color = (255, 60, 60)    # default red when patrolling
+
         pygame.draw.circle(surf,eye_color,(sx+5, sy+4),2)
         pygame.draw.circle(surf,eye_color,(sx+13,sy+4),2)
-
-        # Alert indicator - different for different states
-        if self.alert:
-            if self.state == 'attack':
-                alert_color = (255, 0, 0, 200)  # Red for attack
-            else:
-                alert_color = (255, 200, 0, 200)  # Yellow for chase
-            
-            a2=int(200*abs(math.sin(self.anim*0.25)))
-            al=pygame.Surface((16,16),pygame.SRCALPHA)
-            pygame.draw.polygon(al, alert_color, [(8,0),(16,16),(0,16)])
-            pygame.draw.polygon(al, (alert_color[0], alert_color[1], alert_color[2], a2//2), [(8,0),(16,16),(0,16)],1)
-            surf.blit(al,(sx+1,sy-20))

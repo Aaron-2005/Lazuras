@@ -160,7 +160,7 @@ class Player:
     GSPD=5.5; GFLOAT=4.2; GGRAV=0.03; GMXDY=2.5
 
     MAX_GHOST_BURSTS = 2
-    GHOST_BURST_FRAMES = 300   # 5 seconds at 60 FPS
+    GHOST_BURST_FRAMES = 120   # 5 seconds at 60 FPS
 
     MAX_JUMPS = 2
 

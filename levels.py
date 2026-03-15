@@ -252,6 +252,8 @@ def build_prelude_5():
         {'type': 'exit',  'col': 25, 'row': 14},
     ]
     return t, objs
+
+
 # =======================================================
 # LEVEL 1 — learn moving platform + lever + gate + exit
 # =======================================================
@@ -409,6 +411,7 @@ def build_new_level_v1():
     ]
 
     return t, objs
+
 
 # =======================================================
 # LEVEL 3 — first ghost route
@@ -747,6 +750,76 @@ def build_level_6():
 
     return t, objs
 
+
+# =======================================================
+# LEVEL 8 — lava gauntlet (from sketch)
+#
+# Layout:
+#   Rows  0-2 : open sky, upper platforms
+#   Rows  3-5 : mid section — platform jumps over lava trench
+#   Rows  6-9 : ghost barrier corridor, enemy patrol
+#   Rows 10-12: moving platform chasm crossing
+#   Rows 13-15: lever-gated final approach
+#   Row  16   : bottom corridor, box-on-plate puzzle
+#   Row  17   : lava floor (instant death)
+# =======================================================
+def build_level_7():
+    W = T_W_DARK
+    F = T_FL_ANC
+    P = T_PL_STONE
+    G = T_GH_BAR
+    L = T_LAZ_FL
+
+    tile_rows = [
+        "..............................",
+        "..............................",
+        ".....................-........",
+        ".......=======================",
+        "......................========",
+        "......................========",
+        "..............................",
+        "..............................",
+        ".....-----....................",
+        "..............................",
+        "..............................",
+        "..............-..GG.......----",
+        "..............-LLLLLLLLLLL----",
+        "..............-===========----",
+        "..............-===========----",
+        "..............-===========----",
+        "====-LLLL-===================.",
+        "==============================",
+    ]
+
+    tile_map = {
+        "#": W,
+        "=": F,
+        "-": P,
+        "G": G,
+        "L": L,
+    }
+
+    t = build_tiles(tile_rows, tile_map)
+
+    objs = [
+        {'type': 'spawn', 'col': 1,  'row': 15},
+        {'type': 'pad',   'col': 1,  'row': 15, 'id': 0},
+        {'type': 'gate',  'col': 21, 'row': 0,  'id': 'g0', 'open': False},
+        {'type': 'gate',  'col': 22, 'row': 0,  'id': 'g1', 'open': False},
+        {'type': 'gate',  'col': 21, 'row': 1,  'id': 'g2', 'open': False},
+        {'type': 'gate',  'col': 22, 'row': 1,  'id': 'g3', 'open': False},
+        {'type': 'gate',  'col': 21, 'row': 2,  'id': 'g4', 'open': False},
+        {'type': 'gate',  'col': 22, 'row': 2,  'id': 'g5', 'open': False},
+        {'type': 'lever', 'col': 29, 'row': 10, 'id': 'lev0', 'targets': ['g0','g1','g2','g3','g4','g5']},
+        {'type': 'enemy', 'col': 17, 'row': 1,  'patrol': 3},
+        {'type': 'enemy', 'col': 6, 'row': 4,  'patrol': 2},
+        {'type': 'pad',   'col': 22, 'row': 4,  'id': 1},
+        {'type': 'exit',  'col': 25, 'row': 1},
+    ]
+
+    return t, objs
+
+
 LEVELS = [
     build_prelude_1,
     build_prelude_2,
@@ -761,4 +834,5 @@ LEVELS = [
     build_level_4,
     build_level_5,
     build_level_6,
+    build_level_7,   # ← new level appended here
 ]
